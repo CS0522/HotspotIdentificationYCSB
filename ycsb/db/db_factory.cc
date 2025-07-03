@@ -14,7 +14,7 @@
 #include "db/tbb_rand_db.h"
 #include "db/tbb_scan_db.h"
 // #include "db/rocksdb_db.h"
-#include "db/nofdb_db.h"
+#include "db/keystats_db.h"
 
 const std::string rocksdb_path{"/mnt/nvme1/rocksdb_data"};
 
@@ -34,8 +34,11 @@ DB* DBFactory::CreateDB(utils::Properties &props) {
   } else if (props["dbname"] == "rocksdb") {
     std::filesystem::create_directories(rocksdb_path);
     return nullptr;
-  } else if (props["dbname"] == "nofdb") {
-    return new NoFDB();
+  }
+  // 对 Key 分布统计时，使用 basic db
+  else if (props["dbname"] == "key_stats")
+  {
+    return new KeyStatsDB;
   } else {
     return NULL;
   }

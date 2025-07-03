@@ -104,8 +104,8 @@ int main(const int argc, const char *argv[]) {
   cout << hists[0]->ToString() << endl;
 
   // @CS0522
-  // Load 与 Run 之间停 10 秒
-  std::cout << "Waiting 10s before performing transactions......" << std::endl;
+  // Load 与 Run 之间停 3 秒
+  std::cout << "Waiting 3s before performing transactions......" << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(3));
   std::cout << "Starting performing transactions......" << std::endl << std::endl;
 
