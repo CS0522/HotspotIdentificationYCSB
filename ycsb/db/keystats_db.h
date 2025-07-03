@@ -10,6 +10,8 @@
 
 #include <atomic>
 #include <unordered_map>
+#include <algorithm>
+#include <vector>
 
 namespace ycsbc {
 
@@ -34,6 +36,8 @@ public:
   int Delete(const std::string &table, const std::string &key);
 
   int Special(const std::string &command);
+
+  void OutputStats();
 
 private:
   std::mutex key_stats_mtx_;

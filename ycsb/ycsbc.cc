@@ -19,6 +19,7 @@
 #include "core/core_workload.h"
 #include "core/histogram.h"
 #include "db/db_factory.h"
+#include "db/keystats_db.h"
 
 using namespace std;
 
@@ -140,6 +141,13 @@ int main(const int argc, const char *argv[]) {
   cout << "# Run throughput (KOPS): ";
   cout << total_ops / duration << endl;
   cout << hists[0]->ToString() << endl;
+  
+  if (props["dbname"] == "key_stats")
+  {
+    auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);
+    keystats_db->OutputStats();
+  }
+
   delete db;
 }
 
@@ -163,19 +171,6 @@ string ParseCommandLine(int argc, const char *argv[], utils::Properties &props) 
       }
       props.SetProperty("dbname", argv[argindex]);
       argindex++;
-    }
-    // @CS0522
-    // 添加 server 参数
-    else if (strcmp(argv[argindex], "-server") == 0)
-    {
-        argindex++;
-        if (argindex >= argc)
-        {
-            UsageMessage(argv[0]);
-            exit(0);
-        }
-        props.SetProperty("server", argv[argindex]);
-        argindex++;
     }
     // 添加 fieldlength 参数
     else if (strcmp(argv[argindex], "-fieldlength") == 0)
