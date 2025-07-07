@@ -91,7 +91,7 @@ void KeyStatsDB::OutputStats()
       continue;
     std::cout << "Key: " << ks.first << ", count: " << ks.second << std::endl;
   }
-  std::cout << "===========" << std::endl << "Total Count: " << total_count << std::endl;
+  std::cout << "===========" << std::endl << "Total Key Num: " << total_count << std::endl;
 }
 
 } // ycsbc
