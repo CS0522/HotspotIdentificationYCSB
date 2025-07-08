@@ -29,6 +29,8 @@ public:
 
   // @brief 返回是否为热数据
   virtual bool IsHotKey(const std::string& key) = 0;
+  // @brief 返回所有热数据
+  virtual Status GetHotKeys(std::vector<std::string>& hot_keys) = 0;
 
   virtual void Display() = 0;
 };

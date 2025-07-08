@@ -46,6 +46,7 @@ public:
   Status Get(const std::string& key);
 
   bool IsHotKey(const std::string& key);
+  Status GetHotKeys(std::vector<std::string>& hot_keys);
 
   void Display();
 };

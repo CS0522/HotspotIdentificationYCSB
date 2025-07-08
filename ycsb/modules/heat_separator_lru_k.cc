@@ -109,6 +109,12 @@ Status HeatSeparatorLruK::Evict()
   return SUCCESS;
 }
 
+Status HeatSeparatorLruK::GetHotKeys(std::vector<std::string>& hot_keys)
+{
+  hot_keys = std::vector<std::string>(this->cache_queue.begin(), this->cache_queue.end());
+  return SUCCESS;
+}
+
 void HeatSeparatorLruK::Display()
 {
   std::lock_guard<std::mutex> lock(this->separator_mtx_);
