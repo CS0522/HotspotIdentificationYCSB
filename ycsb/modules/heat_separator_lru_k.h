@@ -30,7 +30,7 @@ private:
   // 访问次数阈值
   uint32_t k;
   // 缓存队列容量
-  uint32_t capacity;
+  size_t capacity;
   std::list<std::string> cache_queue;
   std::list<std::string> history_queue;
   // Key --> Lru-K Cache Entry
@@ -40,7 +40,7 @@ private:
   Status Evict();
 
 public:
-  HeatSeparatorLruK(const uint32_t k_, const uint32_t c_);
+  HeatSeparatorLruK(const uint32_t k_, const size_t c_);
 
   Status Put(const std::string& key);
   Status Get(const std::string& key);

@@ -4,7 +4,7 @@
 namespace module
 {
 
-HeatSeparatorLruK::HeatSeparatorLruK(const uint32_t k_, const uint32_t c_)
+HeatSeparatorLruK::HeatSeparatorLruK(const uint32_t k_, const size_t c_)
   : k(k_), capacity(c_)
 {
   std::cout << "Lru-K Heat Separator is initialized, k = " << k << ", queue capacity = " << capacity << std::endl;

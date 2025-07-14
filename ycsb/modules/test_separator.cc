@@ -1,6 +1,7 @@
 #include "separator.h"
 #include "heat_separator_lru_k.h"
 #include "heat_separator_window.h"
+#include "heat_separator_sketch.h"
 
 #include <random>
 #include <chrono>
@@ -33,6 +34,8 @@ int main(int argc, char *argv[])
     heat_separator = new HeatSeparatorLruK(3, 10);
   else if (algorithm_arg == 1)
     heat_separator = new HeatSeparatorWindow(std::chrono::milliseconds(5), 3);
+  else if (algorithm_arg == 2)
+    heat_separator = new HeatSeparatorSketch(50, 0.001, 0.01, 3);
 
   if (!heat_separator)
   {

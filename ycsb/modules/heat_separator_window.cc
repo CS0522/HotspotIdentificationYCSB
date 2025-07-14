@@ -11,7 +11,7 @@ HeatSeparatorWindow::HeatSeparatorWindow(const std::chrono::milliseconds w_s, co
 }
 
 Status HeatSeparatorWindow::RecordAccess(const std::string& key)
-{ 
+{
   std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 
   // clean out-of-date records
@@ -35,6 +35,7 @@ Status HeatSeparatorWindow::RecordAccess(const std::string& key)
 
 Status HeatSeparatorWindow::Put(const std::string& key)
 {
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
   std::cout << "Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
   return this->RecordAccess(key);
@@ -42,6 +43,7 @@ Status HeatSeparatorWindow::Put(const std::string& key)
 
 Status HeatSeparatorWindow::Get(const std::string& key)
 {
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
   std::cout << "Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
     std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
   return this->RecordAccess(key);
