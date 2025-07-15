@@ -2,6 +2,7 @@
 #include "heat_separator_lru_k.h"
 #include "heat_separator_window.h"
 #include "heat_separator_sketch.h"
+#include "heat_separator_heap.h"
 
 #include <random>
 #include <chrono>
@@ -13,6 +14,8 @@ void usage()
   std::cerr << "Separator Algorithm: " << std::endl;
   std::cerr << "  LRU-K:  0" << std::endl;
   std::cerr << "  Window: 1" << std::endl;
+  std::cerr << "  Sketch: 2" << std::endl;
+  std::cerr << "  Heap:   3" << std::endl;
 }
 
 int main(int argc, char *argv[])
@@ -36,6 +39,8 @@ int main(int argc, char *argv[])
     heat_separator = new HeatSeparatorWindow(std::chrono::milliseconds(5), 3);
   else if (algorithm_arg == 2)
     heat_separator = new HeatSeparatorSketch(50, 0.001, 0.01, 3);
+  // else if (algorithm_arg == 3)
+  //   heat_separator = new HeatSeparatorHeap(10, 3);
 
   if (!heat_separator)
   {
