@@ -1,6 +1,8 @@
 #ifndef _HEAT_SEPARATOR_HEAP_H_
 #define _HEAT_SEPARATOR_HEAP_H_
 
+// NO USED
+
 #include "separator.h"
 #include <chrono>
 #include <queue>

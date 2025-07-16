@@ -151,6 +151,8 @@ HeatSeparatorSketch::HeatSeparatorSketch(const size_t window_size,
   : lru_window(window_size), count_min_sketch(e, delta, t)
 {
   std::cout << "Count-Min Sketch Heat Separator is initialized" << std::endl;
+
+  this->algorithm_name = "sketch";
 }
 
 Status HeatSeparatorSketch::Put(const std::string& key)

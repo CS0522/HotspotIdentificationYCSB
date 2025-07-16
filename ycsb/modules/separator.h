@@ -22,6 +22,8 @@ class Separator
 {
 protected:
   std::mutex separator_mtx_;
+  // algorithm name
+  std::string algorithm_name;
 
 public:
   virtual Status Put(const std::string& key) = 0;
@@ -33,6 +35,8 @@ public:
   virtual Status GetHotKeys(std::vector<std::string>& hot_keys) = 0;
 
   virtual void Display() = 0;
+
+  std::string GetName() { return this->algorithm_name; }
 };
 
 /**

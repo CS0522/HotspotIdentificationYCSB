@@ -8,6 +8,8 @@ HeatSeparatorWindow::HeatSeparatorWindow(const std::chrono::milliseconds w_s, co
   : window_size(w_s), threshold(t)
 {
   std::cout << "Window Heat Separator is initialized" << std::endl;
+
+  this->algorithm_name = "window";
 }
 
 Status HeatSeparatorWindow::RecordAccess(const std::string& key)

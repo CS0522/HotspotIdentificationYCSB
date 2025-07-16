@@ -8,6 +8,8 @@ HeatSeparatorLruK::HeatSeparatorLruK(const uint32_t k_, const size_t c_)
   : k(k_), capacity(c_)
 {
   std::cout << "Lru-K Heat Separator is initialized, k = " << k << ", queue capacity = " << capacity << std::endl;
+
+  this->algorithm_name = "lruk";
 }
 
 Status HeatSeparatorLruK::Put(const std::string& key)

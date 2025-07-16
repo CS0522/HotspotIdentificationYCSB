@@ -13,6 +13,11 @@
 #include <algorithm>
 #include <vector>
 
+#include "modules/separator.h"
+#include "modules/heat_separator_lru_k.h"
+#include "modules/heat_separator_sketch.h"
+#include "modules/heat_separator_window.h"
+
 namespace ycsbc {
 
 class KeyStatsDB : public DB {
@@ -42,10 +47,12 @@ public:
 private:
   std::mutex key_stats_mtx_;
   // 引入 哈希表 存储 Key 对应的统计计数
-  // TODO: 可以用小根堆实现 Top-K
   std::unordered_map<std::string, int64_t> key_stats_;
   // 开始统计的标志位
   std::atomic<bool> start_stats_{false};
+
+  // 热识别算法模块
+  std::vector<module::HeatSeparator*> heat_separators;
 };
 
 } // ycsbc

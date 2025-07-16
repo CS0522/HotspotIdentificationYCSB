@@ -142,6 +142,7 @@ int main(const int argc, const char *argv[]) {
   cout << total_ops / duration << endl;
   cout << hists[0]->ToString() << endl;
   
+  // Key 统计功能、显式转换后输出到文件
   if (props["dbname"] == "key_stats")
   {
     auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);

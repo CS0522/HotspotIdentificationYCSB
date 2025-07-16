@@ -34,7 +34,10 @@ message(STATUS "INCLUDE_DIRS: ${CMAKE_CURRENT_BINARY_DIR} ${YCSB_INCLUDE_DIR}")
 file(GLOB_RECURSE SOURCES
     ${CMAKE_SOURCE_DIR}/db/*.cc
     ${CMAKE_SOURCE_DIR}/lib/*.cc
-    ${CMAKE_SOURCE_DIR}/core/*.cc)
+    ${CMAKE_SOURCE_DIR}/core/*.cc
+    ${CMAKE_SOURCE_DIR}/modules/*.cc)
+list(REMOVE_ITEM SOURCES
+    "${CMAKE_SOURCE_DIR}/modules/test_separator.cc")
 
 add_executable(ycsb ${CMAKE_SOURCE_DIR}/ycsbc.cc ${SOURCES})
 
