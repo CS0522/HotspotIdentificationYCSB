@@ -1,6 +1,9 @@
 #include "db/keystats_db.h"
 #include <fstream>
 
+// portion of all keys
+#define HOT_KEY_PORTION 20
+
 namespace ycsbc {
 
 void KeyStatsDB::Init()
@@ -12,9 +15,9 @@ void KeyStatsDB::Init()
     return;
   // 初始化 Heat Separator 模块
   // TODO: 调参
-  this->heat_separators.emplace_back(new module::HeatSeparatorLruK(3, 200));
-  this->heat_separators.emplace_back(new module::HeatSeparatorWindow(std::chrono::milliseconds(5), 3));
-  this->heat_separators.emplace_back(new module::HeatSeparatorSketch(200, 0.001, 0.01, 3));
+  this->heat_separators.emplace_back(new module::HeatSeparatorLruK(3, 500));
+  this->heat_separators.emplace_back(new module::HeatSeparatorWindow(std::chrono::milliseconds(100), 3));
+  this->heat_separators.emplace_back(new module::HeatSeparatorSketch(100, 0.001, 0.01, 10));
 
   std::cout << "Heat Separator Modules are initialized. " << std::endl;
 }
@@ -101,14 +104,22 @@ void KeyStatsDB::OutputStats()
   
   size_t total_count = 0;
   // 降序输出的 vector
-  std::vector<std::pair<std::string, int64_t>> ordered_key_stats(this->key_stats_.begin(), this->key_stats_.end());
+  std::vector<std::pair<std::string, int64_t>> key_stats_freq_descend(this->key_stats_.begin(), this->key_stats_.end());
   // 降序
   auto descend_cmp = [](const auto& a, const auto& b) {
         return a.second > b.second;
   };
-  std::sort(ordered_key_stats.begin(), ordered_key_stats.end(), descend_cmp);
+  std::sort(key_stats_freq_descend.begin(), key_stats_freq_descend.end(), descend_cmp);
+  std::vector<std::pair<std::string, int64_t>> key_stats_dict_ordered(this->key_stats_.begin(), this->key_stats_.end());
+  // 字典排序
+  auto dict_cmp = [](const auto& a, const auto& b) {
+      if (a.first.size() != b.first.size()) 
+        return a.first.size() < b.first.size();
+      return a.first < b.first;
+  };
+  std::sort(key_stats_dict_ordered.begin(), key_stats_dict_ordered.end(), dict_cmp);
 
-  for (const auto& ks : ordered_key_stats)
+  for (const auto& ks : key_stats_freq_descend)
   {
     total_count++;
     if (ks.second <= 1)
@@ -118,16 +129,36 @@ void KeyStatsDB::OutputStats()
   std::cout << "===========" << std::endl << "Total Key Num: " << total_count << std::endl;
 
   // 输出到文件
-  std::fstream output_file("./key_stats.csv", std::ios::out);
-  if (!output_file.is_open())
+  std::fstream output_file_original("./key_stats.csv", std::ios::out);
+  std::fstream output_file_descend("./key_stats_descend.csv", std::ios::out);
+  std::fstream output_file_dict_ordered("./key_stats_dict_ordered.csv", std::ios::out);
+  std::fstream output_file_hotkeys("./key_stats_hotkeys.csv", std::ios::out);
+  if (!output_file_original.is_open() || !output_file_descend.is_open() || !output_file_dict_ordered.is_open())
   {
-    std::cerr << "key_stats.csv open failed" << std::endl;
+    std::cerr << "key_stats csv file open failed" << std::endl;
     exit(EXIT_FAILURE);    
   }
-  for (const auto& ks : ordered_key_stats)
-    output_file << ks.first << "," << ks.second << std::endl;
-  output_file.close();
+  for (const auto& ks : this->key_stats_)
+    output_file_original << ks.first << "," << ks.second << std::endl;
+  output_file_original.close();
   std::cout << "key_stats.csv is generated successfully" << std::endl;
+  for (const auto& ks : key_stats_freq_descend)
+    output_file_descend << ks.first << "," << ks.second << std::endl;
+  output_file_descend.close();
+  std::cout << "key_stats_descend.csv is generated successfully" << std::endl;
+  for (const auto& ks : key_stats_dict_ordered)
+    output_file_dict_ordered << ks.first << "," << ks.second << std::endl;
+  output_file_dict_ordered.close();
+  std::cout << "key_stats_dict_ordered.csv is generated successfully" << std::endl;
+  // Top-N 的键视为热 key
+  size_t portion_threshold = key_stats_freq_descend.size() * HOT_KEY_PORTION / 100;
+  for (size_t i = 0; i < key_stats_freq_descend.size(); i++)
+  {
+    if (i <= portion_threshold)
+      output_file_hotkeys << key_stats_freq_descend[i].first << std::endl;
+  }
+  output_file_hotkeys.close();
+  std::cout << "key_stats_hotkeys.csv is generated successfully" << std::endl;
 
   // 冷热识别模块输出到文件
   std::vector<std::string> hot_keys;
