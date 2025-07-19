@@ -20,7 +20,8 @@ insertproportion=0
 readmodifywriteproportion=0
 
 # 修改
-recordcount=10000
-operationcount=10000
+# 10M
+recordcount=10000000
+operationcount=10000000
 
 requestdistribution=zipfian

@@ -1,0 +1,28 @@
+{
+  "operationcount": 10000000,
+  "heat_separators": [
+    {
+      "type": "lruk",
+      "params": {
+        "k": 3,
+        "capacity": 10000
+      }
+    },
+    {
+      "type": "window",
+      "params": {
+        "window_size": 3000,
+        "threshold": 5
+      }
+    },
+    {
+      "type": "sketch",
+      "params": {
+        "window_size": 10000,
+        "epsilon": 0.00001,
+        "delta": 0.0001,
+        "threshold": 5
+      }
+    }
+  ]
+}

@@ -38,16 +38,16 @@ Status HeatSeparatorWindow::RecordAccess(const std::string& key)
 Status HeatSeparatorWindow::Put(const std::string& key)
 {
   std::lock_guard<std::mutex> lock(this->separator_mtx_);
-  std::cout << "Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
-    std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
+  // std::cout << "Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
+  //   std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
   return this->RecordAccess(key);
 }
 
 Status HeatSeparatorWindow::Get(const std::string& key)
 {
   std::lock_guard<std::mutex> lock(this->separator_mtx_);
-  std::cout << "Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
-    std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
+  // std::cout << "Timestamp: " << std::chrono::duration_cast<std::chrono::milliseconds>(
+  //   std::chrono::steady_clock::now().time_since_epoch()).count() << std::endl;
   return this->RecordAccess(key);
 }
 

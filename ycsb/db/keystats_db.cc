@@ -1,8 +1,11 @@
 #include "db/keystats_db.h"
 #include <fstream>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 // portion of all keys
-#define HOT_KEY_PORTION 20
+#define HOT_KEY_PORTION 1
 
 namespace ycsbc {
 
@@ -13,11 +16,60 @@ void KeyStatsDB::Init()
   // 避免 DelegateClient() 中重复初始化模块
   if (this->heat_separators.size())
     return;
-  // 初始化 Heat Separator 模块
-  // TODO: 调参
-  this->heat_separators.emplace_back(new module::HeatSeparatorLruK(3, 500));
-  this->heat_separators.emplace_back(new module::HeatSeparatorWindow(std::chrono::milliseconds(100), 3));
-  this->heat_separators.emplace_back(new module::HeatSeparatorSketch(100, 0.001, 0.01, 10));
+  
+  // 读取 config 文件
+  std::fstream config_file("./modules/separator_config.json", std::ios::in);
+  if (!config_file.is_open())
+  {
+    std::cerr << "separator_config.json open failed" << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  json config;
+  try
+  {
+    config_file >> config;
+  }
+  catch (const json::parse_error& e)
+  {
+    std::cerr << "json parse error: " << e.what() << std::endl;
+    exit(EXIT_FAILURE);
+  }
+  // 创建热识别模块
+  size_t operationcount = config["operationcount"].get<size_t>();
+  for (auto& module_config : config["heat_separators"]) 
+  {
+    std::string type = module_config["type"];
+    if (type == "lruk") 
+    {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorLruK(
+          params["k"].get<uint32_t>(),
+          params["capacity"].get<size_t>()
+        )
+      );
+    }
+    else if (type == "window") {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorWindow(
+          std::chrono::milliseconds(params["window_size"].get<int>()),
+          params["threshold"].get<uint32_t>()
+        )
+      );
+    }
+    else if (type == "sketch") {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorSketch(
+          params["window_size"].get<size_t>(),
+          params["epsilon"].get<double>(),
+          params["delta"].get<double>(),
+          params["threshold"].get<size_t>()
+        )
+      );
+    }
+  }
 
   std::cout << "Heat Separator Modules are initialized. " << std::endl;
 }
@@ -124,7 +176,7 @@ void KeyStatsDB::OutputStats()
     total_count++;
     if (ks.second <= 1)
       continue;
-    std::cout << "Key: " << ks.first << ", count: " << ks.second << std::endl;
+    // std::cout << "Key: " << ks.first << ", count: " << ks.second << std::endl;
   }
   std::cout << "===========" << std::endl << "Total Key Num: " << total_count << std::endl;
 
@@ -151,7 +203,7 @@ void KeyStatsDB::OutputStats()
   output_file_dict_ordered.close();
   std::cout << "key_stats_dict_ordered.csv is generated successfully" << std::endl;
   // Top-N 的键视为热 key
-  size_t portion_threshold = key_stats_freq_descend.size() * HOT_KEY_PORTION / 100;
+  size_t portion_threshold = static_cast<size_t>(key_stats_freq_descend.size() * HOT_KEY_PORTION / 100);
   for (size_t i = 0; i < key_stats_freq_descend.size(); i++)
   {
     if (i <= portion_threshold)
