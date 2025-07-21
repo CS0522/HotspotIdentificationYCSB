@@ -5,7 +5,7 @@
 using json = nlohmann::json;
 
 // portion of all keys
-#define HOT_KEY_PORTION 1
+static double g_hot_key_portion;
 
 namespace ycsbc {
 
@@ -36,10 +36,30 @@ void KeyStatsDB::Init()
   }
   // 创建热识别模块
   size_t operationcount = config["operationcount"].get<size_t>();
+  g_hot_key_portion = config["hot_key_portion"].get<double>();
   for (auto& module_config : config["heat_separators"]) 
   {
     std::string type = module_config["type"];
-    if (type == "lruk") 
+    if (type == "lru") 
+    {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorLru(
+          params["capacity"].get<size_t>()
+        )
+      );
+    }
+    else if (type == "lfu")
+    {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorLfu(
+          params["capacity"].get<size_t>(),
+          params["min_freq"].get<size_t>()
+        )
+      );
+    }
+    else if (type == "lruk") 
     {
       auto params = module_config["params"];
       heat_separators.emplace_back(
@@ -65,7 +85,8 @@ void KeyStatsDB::Init()
           params["window_size"].get<size_t>(),
           params["epsilon"].get<double>(),
           params["delta"].get<double>(),
-          params["threshold"].get<size_t>()
+          params["threshold"].get<size_t>(),
+          params["enable_lru"].get<bool>()
         )
       );
     }
@@ -203,7 +224,8 @@ void KeyStatsDB::OutputStats()
   output_file_dict_ordered.close();
   std::cout << "key_stats_dict_ordered.csv is generated successfully" << std::endl;
   // Top-N 的键视为热 key
-  size_t portion_threshold = static_cast<size_t>(key_stats_freq_descend.size() * HOT_KEY_PORTION / 100);
+  std::cout << "Hot Key Portion: " << g_hot_key_portion << std::endl;
+  size_t portion_threshold = static_cast<size_t>(key_stats_freq_descend.size() * g_hot_key_portion);
   for (size_t i = 0; i < key_stats_freq_descend.size(); i++)
   {
     if (i <= portion_threshold)

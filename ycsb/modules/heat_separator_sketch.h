@@ -64,6 +64,8 @@ public:
   Status GetAllKeys(std::vector<std::string>& keys);
   bool IsContain(const std::string& key);
 
+  void SetWindowSize(const size_t size);
+
   void Display();
 };
 
@@ -78,10 +80,12 @@ private:
   LRUCache lru_window;
   // CMS
   CountMinSketch count_min_sketch;
+  bool enable_lru;
 
 public:
   HeatSeparatorSketch(const size_t window_size, 
-                      const double e, const double delta, const size_t t);
+                      const double e, const double delta, const size_t t, 
+                      const bool enable_lru);
 
   Status Put(const std::string& key);
   Status Get(const std::string& key);

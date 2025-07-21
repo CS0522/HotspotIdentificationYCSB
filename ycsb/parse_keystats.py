@@ -5,7 +5,7 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib_venn import venn2
+from matplotlib_venn import venn2 # type: ignore
 import matplotlib.patches as mpatches
 
 def read_key_stats_file(file_name: str, col_names: list):
@@ -74,6 +74,10 @@ def calculate_hotkeys_coverage(groundtruth_file_name: str, result_file_name: str
     print(f"{algo_name}: \n - Recall: {recall:.2f}%\n - Precision: {precision:.2f}%")
     return recall, precision
 
+color_yellow = '#FFC107'
+color_red = '#F44336'
+color_green = '#4CAF50'
+
 """
 绘制堆叠分组条形图
 """
@@ -99,7 +103,7 @@ def plot_stacked_barchart(groundtruth_file_name: str, algorithms: list):
     x = np.arange(len(algorithms))
     width = 0.7
     # 颜色设置
-    colors = {'hit': '#4CAF50', 'miss': '#FFC107', 'false': '#F44336'}
+    colors = {'hit': color_green, 'miss': color_yellow, 'false': color_red}
     # 从上到下顺序：false、miss、hit
     # 1. hit part
     p1 = plt.bar(x, data['hit'], width, color = colors['hit'], alpha = 0.7)
@@ -123,7 +127,7 @@ def plot_stacked_barchart(groundtruth_file_name: str, algorithms: list):
         plt.text(i, data['hit'][i]/2, 
                  f"TP: {data['hit'][i]}\n({data['hit'][i]/gt_total:.1%})", 
                  ha='center', va='center', color='black', fontsize=12)
-        plt.text(i, total_stack + 0.05 * gt_total, 
+        plt.text(i, total_stack + 0.1 * gt_total, 
                  f"TP + FN + FP: {total_stack}", 
                  ha='center', va='bottom', fontsize=12, fontweight='bold')
     # 添加标题和标签
@@ -137,7 +141,7 @@ def plot_stacked_barchart(groundtruth_file_name: str, algorithms: list):
         mpatches.Patch(color=colors['miss'], alpha = 0.7, label=f'Miss: Not Identified (FN)'),
         mpatches.Patch(color=colors['false'], alpha = 0.7, label=f'False: Wrongly Identified (FP)')
     ]
-    plt.legend(handles=legend_labels, loc='upper left', fontsize = 12)
+    plt.legend(handles=legend_labels, loc='upper left', fontsize = 14)
     plt.grid(axis='y', alpha=0.3)
     plt.axhline(y=gt_total, color='gray', linestyle='--', alpha=0.7)
     plt.text(
@@ -163,9 +167,9 @@ def plot_venn_diagram(groundtruth_file: str, result_file: str, algo_name: str):
     set_gt = set(df_gt["Keys"])
     set_result = set(df_result["Keys"])
     plt.figure(figsize=(8, 8))
-    left_color = '#FFC107'
-    right_color = '#F44336'
-    intersection_color = '#4CAF50'
+    left_color = color_yellow
+    right_color = color_red
+    intersection_color = color_green
     venn = venn2(
         subsets=(set_gt, set_result),
         set_labels=('Groundtruth Keys', f'{algo_name} Results'),
@@ -185,7 +189,7 @@ def plot_venn_diagram(groundtruth_file: str, result_file: str, algo_name: str):
 
 
 if __name__ == '__main__':
-    algorithms = ["lruk", "window", "sketch"]
+    algorithms = ["lru", "lfu", "lruk", "window", "sketch"]
     
     for algo in algorithms:
         # 计算召回、准确率

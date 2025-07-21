@@ -87,6 +87,12 @@ LRUCache::LRUCache(const size_t c) : capacity(c)
   std::cout << "LRU Window Size: " << this->capacity << std::endl;
 }
 
+void LRUCache::SetWindowSize(const size_t size)
+{
+  this->capacity = size;
+  std::cout << "LRU Window is resized as: " << this->capacity << std::endl;
+}
+
 Status LRUCache::Evict()
 {
   auto last_key = this->key_access_list.back();
@@ -147,12 +153,15 @@ void LRUCache::Display()
 
 
 HeatSeparatorSketch::HeatSeparatorSketch(const size_t window_size, 
-                      const double e, const double delta, const size_t t)
-  : lru_window(window_size), count_min_sketch(e, delta, t)
+                      const double e, const double delta, const size_t t, const bool enable_lru)
+  : lru_window(window_size), count_min_sketch(e, delta, t), enable_lru(enable_lru)
 {
   std::cout << "Count-Min Sketch Heat Separator is initialized" << std::endl;
 
   this->algorithm_name = "sketch";
+
+  if (!enable_lru)
+    this->lru_window.SetWindowSize(UINT64_MAX);
 }
 
 Status HeatSeparatorSketch::Put(const std::string& key)
