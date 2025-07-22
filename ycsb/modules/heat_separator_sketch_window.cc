@@ -1,4 +1,4 @@
-#include "heat_separator_sketch.h"
+#include "heat_separator_sketch_window.h"
 #include <iomanip>
 
 namespace module
@@ -158,7 +158,7 @@ HeatSeparatorSketch::HeatSeparatorSketch(const size_t window_size,
 {
   std::cout << "Count-Min Sketch Heat Separator is initialized" << std::endl;
 
-  this->algorithm_name = "sketch";
+  this->algorithm_name = "sketch_window";
 
   if (!enable_lru)
     this->lru_window.SetWindowSize(UINT64_MAX);

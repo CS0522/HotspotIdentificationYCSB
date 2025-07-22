@@ -78,7 +78,7 @@ void KeyStatsDB::Init()
         )
       );
     }
-    else if (type == "sketch") {
+    else if (type == "sketch_window") {
       auto params = module_config["params"];
       heat_separators.emplace_back(
         new module::HeatSeparatorSketch(
@@ -90,9 +90,17 @@ void KeyStatsDB::Init()
         )
       );
     }
+    else if (type == "w_tinylfu") {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSepratorWTinyLFU(
+          params["capacity"].get<size_t>()
+        )
+      );
+    }
   }
 
-  std::cout << "Heat Separator Modules are initialized. " << std::endl;
+  std::cout << "Heat Separator Modules are initialized " << std::endl;
 }
 
 int KeyStatsDB::Read(const std::string &table, const std::string &key,

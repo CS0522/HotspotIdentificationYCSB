@@ -1,17 +1,17 @@
 {
   "operationcount": 10000000,
-  "hot_key_portion": 0.005,
+  "hot_key_portion": 0.01,
   "heat_separators": [
     {
       "type": "lru",
       "params": {
-        "capacity": 7000
+        "capacity": 15000
       }
     },
     {
       "type": "lfu",
       "params": {
-        "capacity": 7000,
+        "capacity": 15000,
         "min_freq": 10000
       }
     },
@@ -19,7 +19,7 @@
       "type": "lruk",
       "params": {
         "k": 3,
-        "capacity": 7000
+        "capacity": 15000
       }
     },
     {
@@ -30,13 +30,19 @@
       }
     },
     {
-      "type": "sketch",
+      "type": "sketch_window",
       "params": {
         "window_size": 20000,
         "epsilon": 0.001,
         "delta": 0.00001,
         "threshold": 10,
         "enable_lru": true
+      }
+    },
+    {
+      "type": "w_tinylfu",
+      "params": {
+        "capacity": 15000
       }
     }
   ]

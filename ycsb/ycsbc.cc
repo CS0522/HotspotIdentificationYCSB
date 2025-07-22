@@ -29,7 +29,7 @@ string ParseCommandLine(int argc, const char *argv[], utils::Properties &props);
 
 int DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const int num_ops,
     bool is_loading, shared_ptr<Histogram> hist) {
-  db->Init();
+  // db->Init();
   ycsbc::Client client(*db, *wl);
   int oks = 0;
   utils::Timer timer;
@@ -77,36 +77,38 @@ int main(const int argc, const char *argv[]) {
   timer.Reset();
   vector<future<int>> actual_ops;
   int total_ops = stoi(props[ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY]);
-  for (int i = 0; i < num_threads; ++i) {
-    auto hist = make_shared<Histogram>();
-    hist->Clear();
-    hists.emplace_back(hist);
-    actual_ops.emplace_back(async(launch::async,
-        DelegateClient, db, &wl, total_ops / num_threads, true, hist));
-  }
-  assert((int)actual_ops.size() == num_threads);
+  // 跳过 Load 阶段
+  // for (int i = 0; i < num_threads; ++i) {
+  //   auto hist = make_shared<Histogram>();
+  //   hist->Clear();
+  //   hists.emplace_back(hist);
+  //   actual_ops.emplace_back(async(launch::async,
+  //       DelegateClient, db, &wl, total_ops / num_threads, true, hist));
+  // }
+  // assert((int)actual_ops.size() == num_threads);
 
   int sum = 0;
-  for (auto &n : actual_ops) {
-    assert(n.valid());
-    sum += n.get();
-  }
+  // for (auto &n : actual_ops) {
+  //   assert(n.valid());
+  //   sum += n.get();
+  // }
   double duration = timer.GetDurationMs();
   // Send Special Command
+  db->Init();
   db->Special("PAUSE");
-  for (int i = 1; i < num_threads; i++) {
-    hists[0]->Merge(*hists[i]);
-  }
-  cout << "\n" << props["dbname"] << '\t' << file_name << '\t' << num_threads << '\n';
-  cout << "# Load duration (sec): " << duration / 1000.0 << endl;
-  cout << "# Loading records:\t" << sum << endl;
-  cout << "# Load throughput (KOPS): ";
-  cout << total_ops / duration << endl;
-  cout << hists[0]->ToString() << endl;
+  // for (int i = 1; i < num_threads; i++) {
+  //   hists[0]->Merge(*hists[i]);
+  // }
+  // cout << "\n" << props["dbname"] << '\t' << file_name << '\t' << num_threads << '\n';
+  // cout << "# Load duration (sec): " << duration / 1000.0 << endl;
+  // cout << "# Loading records:\t" << sum << endl;
+  // cout << "# Load throughput (KOPS): ";
+  // cout << total_ops / duration << endl;
+  // cout << hists[0]->ToString() << endl;
 
-  // @CS0522
-  // Load 与 Run 之间停 3 秒
-  std::cout << "Waiting 3s before performing transactions......" << std::endl;
+  // // Load 与 Run 之间停 3 秒
+  // std::cout << "Waiting 3s before performing transactions......" << std::endl;
+  std::cout << "Skipped Load Stage, waiting 3s......" << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(3));
   std::cout << "Starting performing transactions......" << std::endl << std::endl;
 

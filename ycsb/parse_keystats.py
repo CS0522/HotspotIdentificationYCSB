@@ -132,7 +132,7 @@ def plot_stacked_barchart(groundtruth_file_name: str, algorithms: list):
                  ha='center', va='bottom', fontsize=12, fontweight='bold')
     # 添加标题和标签
     plt.title('Stacked Comparison of Different Algorithms', fontsize = 16, pad = 20)
-    plt.xlabel('Algorithms', fontsize = 12, labelpad = 10)
+    # plt.xlabel('Algorithms', fontsize = 12, labelpad = 10)
     plt.ylabel('Key Count', fontsize = 12, labelpad = 10)
     plt.xticks(x, algorithms, fontsize = 12)
     plt.ylim(0, max([sum(values) for values in zip(data['hit'], data['miss'], data['false'])]) * 1.2)
@@ -189,7 +189,7 @@ def plot_venn_diagram(groundtruth_file: str, result_file: str, algo_name: str):
 
 
 if __name__ == '__main__':
-    algorithms = ["lru", "lfu", "lruk", "window", "sketch"]
+    algorithms = ["lru", "lfu", "lruk", "window", "sketch_window", "w_tinylfu"]
     
     for algo in algorithms:
         # 计算召回、准确率

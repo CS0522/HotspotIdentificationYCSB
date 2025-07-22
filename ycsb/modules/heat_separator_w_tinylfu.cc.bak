@@ -1,0 +1,267 @@
+#include "heat_separator_w_tinylfu.h"
+#include <iomanip>
+
+namespace module
+{
+
+FrequencySketch::FrequencySketch(const size_t depth, const size_t width)
+{
+  // this->width = std::ceil(capacity * 1.5 / this->depth);
+  this->counter_table.resize(depth, std::vector<uint8_t>(width, 0));
+
+  std::cout << "Frequency Sketch is initialized" << std::endl;
+  std::cout << "  depth: " << depth << ", width: " << width << std::endl;
+}
+
+void FrequencySketch::UpdateCounter(const size_t row, const size_t col)
+{
+  if (this->counter_table[row][col] < 15)
+    this->counter_table[row][col]++;
+}
+
+Status FrequencySketch::UpdateKey(const std::string& key)
+{
+  std::hash<std::string> hash_func;
+  auto hash_val = hash_func(key);
+  // multi-layer hash
+  for (size_t i = 0; i < this->depth; i++)
+  {
+    size_t idx = (hash_val + i * KEY_HASH_SEED) % this->width;
+    this->UpdateCounter(i, idx);
+  }
+
+  return SUCCESS;
+}
+
+Status FrequencySketch::Put(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  return this->UpdateKey(key);
+}
+
+Status FrequencySketch::Get(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  return this->UpdateKey(key);
+}
+
+size_t FrequencySketch::Estimate(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  std::hash<std::string> hash_func;
+  auto hash_val = hash_func(key);
+  uint8_t min_count = 16;
+  // multi-layer hash
+  for (size_t i = 0; i < this->depth; i++)
+  {
+    size_t idx = (hash_val + i * KEY_HASH_SEED) % this->width;
+    min_count = std::min(min_count, this->counter_table[i][idx]);
+  }
+
+  return static_cast<size_t>(min_count);
+}
+
+Status FrequencySketch::MinusCounter()
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  for (size_t i = 0; i < this->depth; i++)
+    for (size_t j = 0; j < this->width; j++)
+      this->counter_table[i][j] /= 2;
+  
+  return SUCCESS;
+}
+
+
+WindowCache::WindowCache(const size_t capacity) : capacity(capacity)
+{
+  std::cout << "WindowCache is initialized" << std::endl;
+  std::cout << "  WindowCache Capacity: " << this->capacity << std::endl;
+}
+
+Status WindowCache::UpdateKey(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  // 若存在则移动到队头
+  if (this->key_iter_map.find(key) != this->key_iter_map.end())
+    this->lru_queue.erase(this->key_iter_map[key]);
+  // 不存在
+  else if (this->lru_queue.size() >= this->capacity)
+    this->Evict();
+
+  this->lru_queue.push_front(key);
+  this->key_iter_map[key] = this->lru_queue.begin();
+
+  return SUCCESS;
+}
+
+void WindowCache::Evict()
+{
+  if (!this->lru_queue.empty())
+  {
+    auto old = this->lru_queue.back();
+    this->key_iter_map.erase(old);
+    this->lru_queue.pop_back();
+  }
+}
+
+Status WindowCache::Put(const std::string& key)
+{
+  return this->UpdateKey(key);
+}
+
+Status WindowCache::Get(const std::string& key)
+{
+  return this->UpdateKey(key);
+}
+
+bool WindowCache::IsContain(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  return (this->key_iter_map.find(key) != this->key_iter_map.end());
+}
+
+
+SegmentCache::SegmentCache(const size_t capacity)
+{
+  this->probation_capacity = static_cast<size_t>(capacity * 0.2);
+  this->protected_capacity = static_cast<size_t>(capacity * 0.8);
+
+  std::cout << "SegmentCache is initialized" << std::endl;
+  std::cout << "  SegmentCache Probation Capacity: " << this->probation_capacity << std::endl
+            << "  SegmentCache Protected Capacity: " << this->protected_capacity << std::endl;
+}
+
+Status SegmentCache::Put(const std::string& key)
+{
+  return this->AddToProbation(key);
+}
+
+Status SegmentCache::Get(const std::string& key)
+{
+  return this->AddToProbation(key);
+}
+
+Status SegmentCache::AddToProbation(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  this->probation_queue.push_front(key);
+  this->probation_key_map[key] = this->probation_queue.begin();
+  if (this->probation_queue.size() > this->probation_capacity)
+  {
+    this->probation_key_map.erase(this->probation_queue.back());
+    this->probation_queue.pop_back();
+  }
+
+  return SUCCESS;
+}
+
+Status SegmentCache::PromoteToProtected(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  if (this->protected_key_map.find(key) == this->protected_key_map.end())
+  {
+    this->protected_queue.push_front(key);
+    this->protected_key_map[key] = this->protected_queue.begin();
+    
+    if (this->protected_queue.size() > this->protected_capacity)
+      this->DemoteFromProtected();
+  }
+  
+  return SUCCESS;
+}
+
+Status SegmentCache::DemoteFromProtected()
+{
+  auto evict = this->protected_queue.back();
+  this->protected_queue.pop_back();
+  this->protected_key_map.erase(evict);
+  this->AddToProbation(evict);
+  return SUCCESS;
+}
+
+Status SegmentCache::GetHotKeys(std::vector<std::string>& hot_keys)
+{
+  hot_keys.assign(this->protected_queue.begin(), this->protected_queue.end());
+  return SUCCESS;
+}
+
+bool SegmentCache::IsContain(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  return (this->probation_key_map.find(key) != this->probation_key_map.end()
+          || this->protected_key_map.find(key) != this->protected_key_map.end());
+}
+
+
+HeatSepratorWTinyLFU::HeatSepratorWTinyLFU(const size_t d, const size_t w, 
+                        const size_t t_c, const size_t m_t)
+  : frequency_sketch(d, w), window_cache(static_cast<size_t>(t_c * 0.1)), 
+    segment_cache(static_cast<size_t>(t_c * 0.9)), minus_threshold(m_t)
+{
+  std::cout << "W-TinyLFU Heat Separator is initialized" << std::endl;
+  std::cout << "  Minus Threshold: " << this->minus_threshold << std::endl;
+
+  this->algorithm_name = "w_tinylfu";
+}
+
+Status HeatSepratorWTinyLFU::UpdateAccessKey(const std::string& key)
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  this->frequency_sketch.Put(key);
+  this->access_count++;
+
+  // 衰减频率
+  if (this->access_count >= this->minus_threshold)
+  {
+    this->frequency_sketch.MinusCounter();
+    this->access_count = 0;
+  }
+  // LRU 缓存中不存在该 Key 时，插入
+  if (!this->window_cache.IsContain(key) && !this->segment_cache.IsContain(key))
+    return this->window_cache.Put(key);
+
+  return SUCCESS;
+}
+
+Status HeatSepratorWTinyLFU::Put(const std::string& key)
+{
+  return this->UpdateAccessKey(key);
+}
+
+Status HeatSepratorWTinyLFU::Get(const std::string& key)
+{
+  return this->UpdateAccessKey(key);
+}
+
+bool HeatSepratorWTinyLFU::IsHotKey(const std::string& key)
+{
+  
+}
+
+Status HeatSepratorWTinyLFU::GetHotKeys(std::vector<std::string>& hot_keys)
+{
+  
+}
+
+void HeatSepratorWTinyLFU::Display()
+{
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
+  std::cout << "===== W-TinyLFU INFO =====" << std::endl;
+  
+  
+
+  std::cout << std::endl;
+}
+
+}

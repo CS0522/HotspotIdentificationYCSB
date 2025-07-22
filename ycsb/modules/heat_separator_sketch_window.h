@@ -1,5 +1,5 @@
-#ifndef _HEAT_SEPARATOR_SKETCH_H_
-#define _HEAT_SEPARATOR_SKETCH_H_
+#ifndef _HEAT_SEPARATOR_SKETCH_WINDOW_H_
+#define _HEAT_SEPARATOR_SKETCH_WINDOW_H_
 
 #include "separator.h"
 #include <chrono>

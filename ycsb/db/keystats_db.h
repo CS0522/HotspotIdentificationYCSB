@@ -15,10 +15,11 @@
 
 #include "modules/separator.h"
 #include "modules/heat_separator_lru_k.h"
-#include "modules/heat_separator_sketch.h"
+#include "modules/heat_separator_sketch_window.h"
 #include "modules/heat_separator_window.h"
 #include "modules/heat_separator_lru.h"
 #include "modules/heat_separator_lfu.h"
+#include "modules/heat_separator_w_tinylfu.h"
 
 namespace ycsbc {
 

@@ -1,0 +1,145 @@
+#ifndef _HEAT_SEPARATOR_W_TINYLFU_H_
+#define _HEAT_SEPARATOR_W_TINYLFU_H_
+
+#include "separator.h"
+
+#include <list>
+#include <unordered_map>
+#include <vector>
+#include <optional>
+#include <random>
+#include <algorithm>
+#include <cmath>
+
+namespace module
+{
+
+static const int KEY_HASH_SEED = 0x9e3779b9;
+
+/** Count-Min Sketch 频率统计部分 */
+class FrequencySketch : public HeatSeparator
+{
+private:
+  // 哈希函数数量
+  size_t depth;
+  // 哈希函数范围
+  size_t width;
+  // 4 位计数器数组
+  std::vector<std::vector<uint8_t>> counter_table;
+
+  void UpdateCounter(const size_t row, const size_t col);
+  Status UpdateKey(const std::string& key);
+
+public:
+  FrequencySketch(const size_t depth, const size_t width);
+
+  Status Put(const std::string& key);
+  Status Get(const std::string& key);
+
+  // not needed
+  bool IsHotKey(const std::string& key) { return false; }
+  // not needed
+  Status GetHotKeys(std::vector<std::string>& hot_keys) { return SUCCESS; }
+
+  // 获取 Key 估计频率
+  size_t Estimate(const std::string& key);
+  // 计数器衰减，防止历史热度堆积
+  Status MinusCounter();
+
+  void Display() {}
+};
+
+
+/** 基于 LRU 窗口缓存 */
+class WindowCache : public HeatSeparator
+{
+private:
+  size_t capacity;
+  std::list<std::string> lru_queue;
+  std::unordered_map<std::string, std::list<std::string>::iterator> key_iter_map;
+
+  Status UpdateKey(const std::string& key);
+  void Evict();
+
+public:
+  WindowCache(const size_t capacity);
+
+  Status Put(const std::string& key);
+  Status Get(const std::string& key);
+
+  bool IsHotKey(const std::string& key) { return false; }
+  Status GetHotKeys(std::vector<std::string>& hot_keys) { return SUCCESS; }
+
+  bool IsContain(const std::string& key);
+
+  void Display() {}
+};
+
+
+/** 分段 LRU */
+class SegmentCache : public HeatSeparator
+{
+private:
+  // 试用区容量 0.2
+  size_t probation_capacity;
+  // 保护区容量 0.8
+  size_t protected_capacity;
+  std::list<std::string> probation_queue;
+  std::list<std::string> protected_queue;
+  std::unordered_map<std::string, std::list<std::string>::iterator> probation_key_map;
+  std::unordered_map<std::string, std::list<std::string>::iterator> protected_key_map;
+
+public:
+  SegmentCache(const size_t capacity);
+
+  // 先缓存在试用区
+  Status Put(const std::string& key);
+  // 先缓存在试用区
+  Status Get(const std::string& key);
+
+  // 缓存提升、降级操作
+  Status AddToProbation(const std::string& key);
+  Status PromoteToProtected(const std::string& key);
+  Status DemoteFromProtected();
+
+  // not needed
+  bool IsHotKey(const std::string& key) { return false; }
+
+  Status GetHotKeys(std::vector<std::string>& hot_keys);
+
+  bool IsContain(const std::string& key);
+
+  void Display() {}
+};
+
+
+/** 实质思路和 Count-Min Sketch + LRU 时间窗口思路很像 */
+class HeatSepratorWTinyLFU : public HeatSeparator
+{
+private:
+  size_t total_capacity;
+  FrequencySketch frequency_sketch;
+  WindowCache window_cache;
+  SegmentCache segment_cache;
+
+  size_t access_count = 0;
+  size_t minus_threshold;
+
+  Status UpdateAccessKey(const std::string& key);
+
+public:
+  HeatSepratorWTinyLFU(const size_t depth, const size_t width, 
+                        const size_t t_c, const size_t m_t);
+
+  Status Put(const std::string& key);
+  Status Get(const std::string& key);
+
+  bool IsHotKey(const std::string& key);
+  Status GetHotKeys(std::vector<std::string>& hot_keys);
+
+  void Display();
+};
+
+}
+
+#endif

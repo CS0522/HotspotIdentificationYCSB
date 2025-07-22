@@ -1,7 +1,7 @@
 #include "separator.h"
 #include "heat_separator_lru_k.h"
 #include "heat_separator_window.h"
-#include "heat_separator_sketch.h"
+#include "heat_separator_sketch_window.h"
 #include "heat_separator_heap.h"
 
 #include <random>
