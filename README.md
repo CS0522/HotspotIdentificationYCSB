@@ -22,3 +22,8 @@ Note that we do not have load and run commands as the original YCSB. Specify
 how many records to load by the recordcount property. Reference properties
 files in the workloads dir.
 
+## 新增
+
+* `key_stats` Key 数据统计信息模块，作为 `-db` 参数；
+
+* `modules/` 下新增热点识别算法模块。
