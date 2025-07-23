@@ -54,6 +54,8 @@ private:
 
   size_t total_capacity_;
 
+  size_t t = 0;
+
   size_t GhostHash(const std::string& key);
   void EvictFromSmallQueue();
   void EvictFromMainQueue();

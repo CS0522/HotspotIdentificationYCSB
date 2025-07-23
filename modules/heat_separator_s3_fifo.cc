@@ -18,6 +18,7 @@ Status HeatSeparatorS3FIFO::Put(const std::string& key)
   std::lock_guard<std::mutex> lock(this->separator_mtx_);
 
   auto now_timestamp = time(nullptr);
+  std::cout << "Put, " << t++ << std::endl;
 
   // Key 存在时
   auto iter = this->key_map_.find(key);
@@ -32,11 +33,17 @@ Status HeatSeparatorS3FIFO::Put(const std::string& key)
   // 检查 Ghost 队列
   size_t hash_val = GhostHash(key);
   auto ghost_iter = this->ghost_map_.find(hash_val);
+  std::cout << "ghost_map size: " << this->ghost_map_.size() << std::endl;
+  std::cout << "ghost_queue size: " << this->ghost_queue_.size() << std::endl;
   if (ghost_iter != this->ghost_map_.end())
   {
+    std::cout << "1" << std::endl;
+    std::cout << (ghost_iter->second)->hash << std::endl;
     // 直接进入 main 队列
     ghost_queue_.erase(ghost_iter->second);
+    std::cout << "erase queue" << std::endl;
     ghost_map_.erase(hash_val);
+    std::cout << "erase map" << std::endl;
     this->main_queue_.data.emplace_back(key);
     this->key_map_[key] = std::prev(this->main_queue_.data.end());
     
@@ -56,6 +63,8 @@ Status HeatSeparatorS3FIFO::Put(const std::string& key)
 
 Status HeatSeparatorS3FIFO::Get(const std::string& key)
 {
+  std::lock_guard<std::mutex> lock(this->separator_mtx_);
+
   auto iter = this->key_map_.find(key);
   if (iter == this->key_map_.end())
     return ERROR;
@@ -83,6 +92,7 @@ size_t HeatSeparatorS3FIFO::GhostHash(const std::string& key)
 
 void HeatSeparatorS3FIFO::EvictFromSmallQueue()
 {
+
   while (!this->small_queue_.data.empty())
   {
     KeyNode& node = this->small_queue_.data.back();
@@ -91,8 +101,10 @@ void HeatSeparatorS3FIFO::EvictFromSmallQueue()
     if (node.frequency == 0)
     {
       size_t hash_val = this->GhostHash(node.key);
-      this->ghost_queue_.emplace_front(hash_val);
+      GhostNode new_node(hash_val);
+      this->ghost_queue_.push_front(new_node);
       this->ghost_map_[hash_val] = this->ghost_queue_.begin();
+      std::cout << "ghost queue push" << std::endl;
     }
     // 高频移入 main 队列
     else
@@ -105,6 +117,7 @@ void HeatSeparatorS3FIFO::EvictFromSmallQueue()
 
 void HeatSeparatorS3FIFO::EvictFromMainQueue()
 {
+
   auto iter = this->main_queue_.data.begin();
   while (iter != this->main_queue_.data.end())
   {
@@ -126,11 +139,13 @@ void HeatSeparatorS3FIFO::EvictFromMainQueue()
 
 void HeatSeparatorS3FIFO::PromoteToMainQueue(const std::string& key)
 {
-  auto iter = this->key_map_[key];
-  iter->is_in_main_queue = true;
+  {
 
-  this->main_queue_.data.splice(main_queue_.data.end(), small_queue_.data, iter);
-        
+    auto iter = this->key_map_[key];
+    iter->is_in_main_queue = true;
+
+    this->main_queue_.data.splice(main_queue_.data.end(), small_queue_.data, iter);
+  } 
   if (main_queue_.data.size() > main_queue_.max_size)
     this->EvictFromMainQueue();
 }

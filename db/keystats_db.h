@@ -22,6 +22,7 @@
 #include "modules/heat_separator_w_tinylfu.h"
 #include "modules/heat_separator_lirs.h"
 #include "modules/heat_separator_s3_fifo.h"
+#include "modules/heat_separator_arc.h"
 
 namespace ycsbc {
 
