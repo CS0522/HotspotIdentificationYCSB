@@ -44,6 +44,18 @@
       "params": {
         "capacity": 15000
       }
+    },
+    {
+      "type": "lirs",
+      "params": {
+        "capacity": 15000
+      }
+    },
+    {
+      "type": "s3_fifo",
+      "params": {
+        "capacity": 15000
+      }
     }
   ]
 }

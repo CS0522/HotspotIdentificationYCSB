@@ -98,6 +98,30 @@ void KeyStatsDB::Init()
         )
       );
     }
+    else if (type == "lirs") {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorLIRS(
+          params["capacity"].get<size_t>()
+        )
+      );
+    }
+    else if (type == "s3_fifo") {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSeparatorS3FIFO(
+          params["capacity"].get<size_t>()
+        )
+      );
+    }
+    else if (type == "arc") {
+      auto params = module_config["params"];
+      heat_separators.emplace_back(
+        new module::HeatSepratorWTinyLFU(
+          params["capacity"].get<size_t>()
+        )
+      );
+    }
   }
 
   std::cout << "Heat Separator Modules are initialized " << std::endl;
