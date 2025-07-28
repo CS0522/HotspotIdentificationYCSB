@@ -79,7 +79,6 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
       // ttl field
       req.ttl = static_cast<uint32_t>(std::stoul(fields[6]));
       this->trace_requests_.push_back(req);
-      this->key_value_size_map_[req.anonymized_key] = std::max(req.value_size, this->key_value_size_map_[req.anonymized_key]);
     }
     catch(const std::exception& e)
     {
@@ -92,7 +91,6 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
   YCSB_C_LOG_INFO("Read completed, total line count: %zu\n", line_cnt);
   // set iterator
   this->trace_iter_ = this->trace_requests_.begin();
-  this->map_iter_ = this->key_value_size_map_.begin();
   this->read_succeeded_ = no_error;
   return no_error;
 }
@@ -108,54 +106,6 @@ size_t TwitterTraceReader::GetAllRequestsCount()
 {
   if (!this->enable_mmap_)
     return this->trace_requests_.size();
-}
-
-bool TwitterTraceReader::GetAllKeys(std::vector<std::string>& keys)
-{
-  if (!this->enable_mmap_)
-  {
-    for (auto map_iter = this->key_value_size_map_.begin(); map_iter != key_value_size_map_.end(); map_iter++)
-      keys.push_back(map_iter->first);
-  }
-  return true;
-}
-
-size_t TwitterTraceReader::GetAllKeysCount()
-{
-  return this->key_value_size_map_.size();
-}
-
-bool TwitterTraceReader::GetAllKeysValueSizeMap(std::unordered_map<std::string, uint32_t>& key_value_size_map)
-{
-  if (!this->enable_mmap_)
-  {
-    key_value_size_map = this->key_value_size_map_;
-  }
-  return true;
-}
-
-size_t TwitterTraceReader::GetMaxValueSizeOfKey(const std::string& key)
-{
-  auto map_iter = this->key_value_size_map_.find(key);
-  if (map_iter != this->key_value_size_map_.end())
-    return map_iter->second;
-  else
-  {
-    YCSB_C_LOG_ERROR("Error: cannot find value size of key: %s\n", key.c_str());
-    return 0;
-  }
-}
-
-std::string TwitterTraceReader::GetNextSequenceKey()
-{
-  std::string key;
-  if (this->map_iter_ != this->key_value_size_map_.end())
-  {
-    key = this->map_iter_->first;
-    this->map_iter_++;
-  }
-
-  return key;
 }
 
 bool TwitterTraceReader::ReadTraceFileByMmap(const std::string& trace_file_path)
@@ -174,7 +124,8 @@ Request* TwitterTraceReader::JumpToFirst()
   if (!this->enable_mmap_)
   {
     this->trace_iter_ = this->trace_requests_.begin();
-    return &(*(this->trace_iter_));
+    this->curr_request_ptr_ = &(*(this->trace_iter_));
+    return curr_request_ptr_;
   }
   
   return nullptr;
@@ -185,7 +136,8 @@ Request* TwitterTraceReader::JumpToLast()
   {
     this->trace_iter_ = this->trace_requests_.end();
     this->trace_iter_--;
-    return &(*(this->trace_iter_));
+    this->curr_request_ptr_ = &(*(this->trace_iter_));
+    return curr_request_ptr_;
   }
 
   return nullptr;
@@ -200,19 +152,56 @@ Request* TwitterTraceReader::GetNext()
     if (this->trace_iter_ == this->trace_requests_.end())
       this->trace_iter_ = this->trace_requests_.begin();
     
-    Request* curr_ptr = &(*(this->trace_iter_));
-    // if is at the last element position
-    if (std::next(this->trace_iter_) == this->trace_requests_.end())
-      return nullptr;
-    // else remove to the next position
-    else
+    this->curr_request_ptr_ = &(*(this->trace_iter_));
+    // remove to the next position
+    if (std::next(this->trace_iter_) != this->trace_requests_.end())
       this->trace_iter_++;
     
-    return curr_ptr;
+    return curr_request_ptr_;
   }
 
   return nullptr;
 }
+
+std::string TwitterTraceReader::GetNextKey()
+{
+  std::string next_key = this->GetNext()->anonymized_key;
+  return next_key;
+}
+
+TwitterTraceOperation TwitterTraceReader::GetNextOperationWithoutForward()
+{  
+  if (!this->enable_mmap_)
+  {
+    if (this->trace_iter_ == this->trace_requests_.end())
+      this->trace_iter_ = this->trace_requests_.begin();
+    
+    Request* next_req = &(*(std::next(this->trace_iter_)));
+    TwitterTraceOperation next_operation = next_req->operation;
+    return next_operation;
+  }
+}
+
+Request* TwitterTraceReader::GetCurrent()
+{
+  return this->curr_request_ptr_;
+}
+
+size_t TwitterTraceReader::GetCurrentValueSize()
+{
+  return ((this->curr_request_ptr_) ? this->curr_request_ptr_->value_size : 0);
+}
+
+size_t TwitterTraceReader::GetCurrentKeySize()
+{
+  return ((this->curr_request_ptr_) ? this->curr_request_ptr_->key_size : 0);
+}
+
+std::string TwitterTraceReader::GetCurrentKey()
+{
+  return ((this->curr_request_ptr_) ? this->curr_request_ptr_->anonymized_key : "");
+}
+
 Request* TwitterTraceReader::GetPrev()
 {
   if (this->trace_requests_.empty())
@@ -223,18 +212,34 @@ Request* TwitterTraceReader::GetPrev()
     if (this->trace_iter_ == this->trace_requests_.end()) 
       this->trace_iter_ = std::prev(this->trace_requests_.end());
     
-    Request* curr_ptr = &(*(this->trace_iter_));
-    // if is at the first element position
-    if (this->trace_iter_ == this->trace_requests_.begin())
-      return nullptr;
-    // else remove to the previous position
-    else
+    this->curr_request_ptr_ = &(*(this->trace_iter_));
+    // remove to the previous position
+    if (this->trace_iter_ != this->trace_requests_.begin())
       this->trace_iter_--;
     
-    return curr_ptr;
+    return this->curr_request_ptr_;
   }
 
   return nullptr;
+}
+
+std::string TwitterTraceReader::GetPrevKey()
+{
+  std::string prev_key = this->GetPrev()->anonymized_key;
+  return prev_key;
+}
+
+TwitterTraceOperation TwitterTraceReader::GetPrevOperationWithoutBackward()
+{
+  if (!this->enable_mmap_)
+  {
+    if (this->trace_iter_ == this->trace_requests_.end()) 
+      this->trace_iter_ = std::prev(this->trace_requests_.end());
+    
+    Request* prev_req = &(*(std::prev(this->trace_iter_)));
+    TwitterTraceOperation prev_operation = prev_req->operation;
+    return prev_operation;
+  }
 }
 
 void TwitterTraceReader::TraverseTrace()
@@ -244,6 +249,7 @@ void TwitterTraceReader::TraverseTrace()
 
   if (!this->enable_mmap_)
   {
+    this->JumpToFirst();
     while (this->trace_iter_ != this->trace_requests_.end())
     {
       std::cout << this->trace_iter_->timestamp << ", " << this->trace_iter_->anonymized_key
@@ -253,6 +259,7 @@ void TwitterTraceReader::TraverseTrace()
   
       this->trace_iter_++;
     }
+    this->JumpToFirst();
   }
 }
 

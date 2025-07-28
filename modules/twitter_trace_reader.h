@@ -11,6 +11,7 @@
 #include <sstream>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <atomic>
 
 #include "core/utils.h"
 
@@ -66,13 +67,13 @@ class TwitterTraceReader
 private:
   std::vector<Request> trace_requests_;
   std::vector<Request>::iterator trace_iter_;
+  Request* curr_request_ptr_ = nullptr;
+  
   bool read_succeeded_ = false;
   bool enable_mmap_ = false;
+  // TODO
   void* mmap_reader_ptr_ = nullptr;
 
-  // 统计所有键及其最大 value_size
-  std::unordered_map<std::string, uint32_t> key_value_size_map_;
-  std::unordered_map<std::string, uint32_t>::iterator map_iter_;
 
 public:
   TwitterTraceReader(bool enable_mmap);
@@ -84,16 +85,6 @@ public:
   bool GetTraceRequests(std::vector<Request>& requests);
   // @brief 返回 Trace 中所有请求个数（操作数）
   size_t GetAllRequestsCount();
-  // @brief 返回所有 Keys
-  bool GetAllKeys(std::vector<std::string>& keys);
-  // @brief 返回所有 Keys 个数
-  size_t GetAllKeysCount();
-  // @brief 返回 key_value_size_map
-  bool GetAllKeysValueSizeMap(std::unordered_map<std::string, uint32_t>& key_value_size_map);
-  // @brief 返回对应 Key 的最大 Value Size
-  size_t GetMaxValueSizeOfKey(const std::string& key);
-  // @brief 用于 Load 阶段，按顺序写入 Key
-  std::string GetNextSequenceKey();
 
   // @brief 通过内存指针方式读取数据
   // TODO
@@ -102,7 +93,15 @@ public:
   Request* JumpToFirst();
   Request* JumpToLast();
   Request* GetNext();
+  std::string GetNextKey();
+  TwitterTraceOperation GetNextOperationWithoutForward();
+  Request* GetCurrent();
+  size_t GetCurrentValueSize();
+  size_t GetCurrentKeySize();
+  std::string GetCurrentKey();
   Request* GetPrev();
+  std::string GetPrevKey();
+  TwitterTraceOperation GetPrevOperationWithoutBackward();
 
   void TraverseTrace();
 };

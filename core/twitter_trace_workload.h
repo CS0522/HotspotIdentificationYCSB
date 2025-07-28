@@ -29,7 +29,7 @@ class TwitterTraceWorkload : public CoreWorkload
   
   virtual void Init(const utils::Properties &p);
   
-  virtual void BuildValues(std::vector<ycsbc::DB::KVPair> &values, const std::string& key);
+  virtual void BuildValues(std::vector<ycsbc::DB::KVPair> &values);
   virtual void BuildUpdate(std::vector<ycsbc::DB::KVPair> &update);
   
   virtual std::string NextTable() { return table_name_; }
@@ -40,6 +40,9 @@ class TwitterTraceWorkload : public CoreWorkload
   virtual Operation NextOperation();
   virtual std::string NextFieldName();
 
+  bool read_all_fields() const { return true; }
+  bool write_all_fields() const { return true; }
+
   virtual size_t GetRecordCount();
   virtual size_t GetOperationCount();
 
@@ -47,7 +50,6 @@ class TwitterTraceWorkload : public CoreWorkload
   ~TwitterTraceWorkload() {}
   
  protected:
-  std::string BuildKeyName(uint64_t key_num);
 
   std::string table_name_;
   int field_count_;
