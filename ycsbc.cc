@@ -28,11 +28,13 @@ void UsageMessage(const char *command);
 bool StrStartWith(const char *str, const char *pre);
 string ParseCommandLine(int argc, const char *argv[], utils::Properties &props);
 
-int DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const size_t num_ops,
+static bool g_workload_twitter = false;
+
+size_t DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const size_t num_ops,
     bool is_loading, shared_ptr<Histogram> hist) {
   db->Init();
   ycsbc::Client client(*db, wl);
-  int oks = 0;
+  size_t oks = 0;
   utils::Timer timer;
   for (size_t i = 0; i < num_ops; ++i) {
     timer.Reset();
@@ -60,16 +62,28 @@ int main(const int argc, const char *argv[]) {
     cout << "Unknown database name " << props["dbname"] << endl;
     exit(0);
   }
-
-  ycsbc::TwitterTraceWorkload *wl = new ycsbc::TwitterTraceWorkload();
+  
+  ycsbc::CoreWorkload *wl = nullptr;
+  if (g_workload_twitter)
+    wl = new ycsbc::TwitterTraceWorkload();
+  else
+    wl = new ycsbc::CoreWorkload();
   wl->Init(props);
 
   // print some infos
-  // std::cout << "fieldcount: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_COUNT_PROPERTY, ycsbc::CoreWorkload::FIELD_COUNT_DEFAULT) << std::endl;
-  // std::cout << "fieldlength: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_LENGTH_PROPERTY, ycsbc::CoreWorkload::FIELD_LENGTH_DEFAULT) << std::endl;
-  // std::cout << "zero_padding: " << props.GetProperty(ycsbc::CoreWorkload::ZERO_PADDING_PROPERTY, ycsbc::CoreWorkload::ZERO_PADDING_DEFAULT) << std::endl;
-  std::cout << "recordcount: " << wl->GetRecordCount() << std::endl;
-  std::cout << "operationcount: " << wl->GetOperationCount() << std::endl;
+  if (g_workload_twitter)
+  {
+    std::cout << "recordcount: " << ((ycsbc::TwitterTraceWorkload*)wl)->GetRecordCount() << std::endl;
+    std::cout << "operationcount: " << ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount() << std::endl;
+  }
+  else
+  {
+    std::cout << "fieldcount: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_COUNT_PROPERTY, ycsbc::CoreWorkload::FIELD_COUNT_DEFAULT) << std::endl;
+    std::cout << "fieldlength: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_LENGTH_PROPERTY, ycsbc::CoreWorkload::FIELD_LENGTH_DEFAULT) << std::endl;
+    std::cout << "zero_padding: " << props.GetProperty(ycsbc::CoreWorkload::ZERO_PADDING_PROPERTY, ycsbc::CoreWorkload::ZERO_PADDING_DEFAULT) << std::endl;
+    std::cout << "record_count: " << props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY) << std::endl;
+    std::cout << "operation_count: " << props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY) << std::endl;
+  }
 
   const int num_threads = stoi(props.GetProperty("threadcount", "1"));
   vector<shared_ptr<Histogram>> hists;
@@ -77,7 +91,11 @@ int main(const int argc, const char *argv[]) {
   utils::Timer timer;
   timer.Reset();
   vector<future<size_t>> actual_ops;
-  size_t total_ops = wl->GetRecordCount();
+  size_t total_ops;
+  if (g_workload_twitter)
+    total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetRecordCount();
+  else
+    total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY));
   for (int i = 0; i < num_threads; ++i) {
     auto hist = make_shared<Histogram>();
     hist->Clear();
@@ -114,7 +132,10 @@ int main(const int argc, const char *argv[]) {
   // Peforms transactions
   hists.clear();
   actual_ops.clear();
-  total_ops = wl->GetOperationCount();
+  if (g_workload_twitter)
+    total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount();
+  else
+    total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY));
   
   timer.Reset();
   for (int i = 0; i < num_threads; ++i) {
@@ -172,6 +193,18 @@ string ParseCommandLine(int argc, const char *argv[], utils::Properties &props) 
         exit(0);
       }
       props.SetProperty("dbname", argv[argindex]);
+      argindex++;
+    }
+    // 添加 workload 参数
+    else if (strcmp(argv[argindex], "-workload") == 0) {
+      argindex++;
+      if (argindex >= argc) {
+        UsageMessage(argv[0]);
+        exit(0);
+      }
+      std::string workload_type(argv[argindex]);
+      if (workload_type == "twitter")
+        g_workload_twitter = true;
       argindex++;
     }
     // 添加 fieldlength 参数
@@ -281,6 +314,7 @@ void UsageMessage(const char *command) {
   cout << "Options:" << endl;
   cout << "  -threads n: execute using n threads (default: 1)" << endl;
   cout << "  -db dbname: specify the name of the DB to use (default: basic)" << endl;
+  cout << "  -workload workload type: 'core' or 'twitter'" << endl;
   cout << "  -server server: (Deprecated) specify the server address, e.g. 127.0.0.1:50051" << endl;
   cout << "  -P propertyfile: load properties from the given file. Multiple files can" << endl;
   cout << "                   be specified, and will be processed in the order specified" << endl;

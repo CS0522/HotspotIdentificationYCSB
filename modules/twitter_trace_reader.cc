@@ -5,24 +5,24 @@ namespace module
 TwitterTraceReader::TwitterTraceReader(bool enable_mmap)
   : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr)
 {
-  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d\n", enable_mmap_);
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d", enable_mmap_);
 }
 
 TwitterTraceReader::TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path)
   : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr)
 {
-  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d\n", enable_mmap_);
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d", enable_mmap_);
   if (!this->enable_mmap_)
   {
     if (this->ReadTraceFile(trace_file_path))
-      YCSB_C_LOG_INFO("Read trace file: %s completed\n", trace_file_path.c_str());
+      YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
     else
       std::runtime_error("Read trace file failed\n");
   }
   else
   {
     if (this->ReadTraceFileByMmap(trace_file_path))
-      YCSB_C_LOG_INFO("Read (by mmap) trace file: %s completed\n", trace_file_path.c_str());
+      YCSB_C_LOG_INFO("Read (by mmap) trace file: %s completed", trace_file_path.c_str());
     else
       std::runtime_error("Read trace file failed\n");
   }
@@ -33,7 +33,7 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
   std::ifstream trace_file(trace_file_path);
   if (!trace_file.is_open())
   {
-    YCSB_C_LOG_ERROR("Error opening trace file: %s\n", trace_file_path.c_str());
+    YCSB_C_LOG_ERROR("Error opening trace file: %s", trace_file_path.c_str());
     return false;
   }
 
@@ -54,7 +54,7 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
     // parse the fields string
     if (fields.size() < 7)
     {
-      YCSB_C_LOG_ERROR("Invalid line format at %zu: %s\n", line_cnt, line.c_str());
+      YCSB_C_LOG_ERROR("Invalid line format at %zu: %s", line_cnt, line.c_str());
       no_error = false;
       continue;
     }
@@ -82,13 +82,13 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
     }
     catch(const std::exception& e)
     {
-      YCSB_C_LOG_ERROR("Parse line error: %s, at %zu: %s\n", e.what(), line_cnt, line.c_str());
+      YCSB_C_LOG_ERROR("Parse line error: %s, at %zu: %s", e.what(), line_cnt, line.c_str());
       no_error = false;
     }
     
   }
 
-  YCSB_C_LOG_INFO("Read completed, total line count: %zu\n", line_cnt);
+  YCSB_C_LOG_INFO("Read completed, total line count: %zu", line_cnt);
   // set iterator
   this->trace_iter_ = this->trace_requests_.begin();
   this->read_succeeded_ = no_error;
@@ -106,13 +106,14 @@ size_t TwitterTraceReader::GetAllRequestsCount()
 {
   if (!this->enable_mmap_)
     return this->trace_requests_.size();
+  return 0;
 }
 
 bool TwitterTraceReader::ReadTraceFileByMmap(const std::string& trace_file_path)
 {
   if (!this->enable_mmap_)
   {
-    YCSB_C_LOG_ERROR("Invoked ReadTraceFileByMmap(), but 'enable_mmap' is false. Invoking ReadTraceFile() instead...\n");
+    YCSB_C_LOG_ERROR("Invoked ReadTraceFileByMmap(), but 'enable_mmap' is false. Invoking ReadTraceFile() instead...");
     return this->ReadTraceFile(trace_file_path);
   }
   
@@ -170,7 +171,14 @@ std::string TwitterTraceReader::GetNextKey()
 }
 
 TwitterTraceOperation TwitterTraceReader::GetNextOperationWithoutForward()
-{  
+{
+  // Run 阶段重放 Trace，iterator 重新归位
+  if (!this->replay_)
+  {
+    this->trace_iter_ = this->trace_requests_.begin();
+    this->replay_ = true;
+  }
+
   if (!this->enable_mmap_)
   {
     if (this->trace_iter_ == this->trace_requests_.end())
@@ -180,6 +188,7 @@ TwitterTraceOperation TwitterTraceReader::GetNextOperationWithoutForward()
     TwitterTraceOperation next_operation = next_req->operation;
     return next_operation;
   }
+  return TwitterTraceOperation::SET;
 }
 
 Request* TwitterTraceReader::GetCurrent()
@@ -231,6 +240,13 @@ std::string TwitterTraceReader::GetPrevKey()
 
 TwitterTraceOperation TwitterTraceReader::GetPrevOperationWithoutBackward()
 {
+  // Run 阶段重放 Trace，iterator 重新归位
+  if (!this->replay_)
+  {
+    this->trace_iter_ = std::prev(this->trace_requests_.end());
+    this->replay_ = true;
+  }
+
   if (!this->enable_mmap_)
   {
     if (this->trace_iter_ == this->trace_requests_.end()) 
@@ -240,6 +256,7 @@ TwitterTraceOperation TwitterTraceReader::GetPrevOperationWithoutBackward()
     TwitterTraceOperation prev_operation = prev_req->operation;
     return prev_operation;
   }
+  return TwitterTraceOperation::SET;
 }
 
 void TwitterTraceReader::TraverseTrace()
@@ -293,7 +310,7 @@ inline void DisplayRequest(const Request& req)
 //     if (tmp)
 //       module::DisplayRequest(*tmp);
 //   }
-//   YCSB_C_LOG_INFO("Jump to first" << std::endl;
+//   YCSB_C_LOG_INFO("Jump to first");
 //   tmp = trace_reader.JumpToFirst();
 //   for (size_t i = 0; i < cnt; i++)
 //   {

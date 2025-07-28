@@ -207,3 +207,5 @@ if __name__ == '__main__':
     # 绘制堆叠条形图
     plot_stacked_barchart("./key_stats_hotkeys.csv", algorithms)
     
+    plot_frequency_line("key_stats_dict_ordered.csv", "fig_key_frequency.png", False)
+    plot_frequency_line("key_stats_descend.csv", "fig_frequency_descend.png", False)

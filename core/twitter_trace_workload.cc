@@ -24,7 +24,7 @@ TwitterTraceWorkload::TwitterTraceWorkload()
 
 void TwitterTraceWorkload::Init(const utils::Properties &p) 
 { 
-  YCSB_C_LOG_INFO("TwitterTraceWorkload is initializing......\n");
+  YCSB_C_LOG_INFO("TwitterTraceWorkload is initializing......");
   
   std::string trace_file_path = p.GetProperty(TRACE_FILE_PROPERTY);
   this->twitter_trace_reader_ = new module::TwitterTraceReader(false, trace_file_path);
@@ -41,9 +41,9 @@ void TwitterTraceWorkload::Init(const utils::Properties &p)
   // jump to first request
   this->twitter_trace_reader_->JumpToFirst();
 
-  YCSB_C_LOG_INFO("TwitterTraceWorkload is initialized\n");
-  YCSB_C_LOG_INFO("\ttable_name: %s\n", table_name_.c_str());
-  YCSB_C_LOG_INFO("\record_count: %zu\n", record_count_);
+  YCSB_C_LOG_INFO("TwitterTraceWorkload is initialized");
+  // YCSB_C_LOG_INFO("\ttable_name: %s", table_name_.c_str());
+  // YCSB_C_LOG_INFO("\trecord_count: %zu", record_count_);
 }
 
 void TwitterTraceWorkload::BuildValues(std::vector<ycsbc::DB::KVPair> &values) 

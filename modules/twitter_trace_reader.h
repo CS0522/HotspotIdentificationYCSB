@@ -74,6 +74,7 @@ private:
   // TODO
   void* mmap_reader_ptr_ = nullptr;
 
+  bool replay_ = false;
 
 public:
   TwitterTraceReader(bool enable_mmap);

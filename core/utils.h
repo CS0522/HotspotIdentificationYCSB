@@ -19,12 +19,10 @@
 #define COLOR_RESET   "\033[0m"
 
 #define YCSB_C_LOG_INFO(fmt, ...) \
-  printf(COLOR_GREEN "[INFO]: " fmt COLOR_RESET "\n", \
-         __FILE__, __LINE__, ##__VA_ARGS__)
+  printf(COLOR_GREEN "[INFO]: " fmt COLOR_RESET "\n", ##__VA_ARGS__)
 
 #define YCSB_C_LOG_ERROR(fmt, ...) \
-  printf(COLOR_RED "[ERROR] %s:%d: " fmt COLOR_RESET "\n", \
-         __FILE__, __LINE__, ##__VA_ARGS__)
+  printf(COLOR_RED "[ERROR] %s:%d: " fmt COLOR_RESET "\n", __FILE__, __LINE__, ##__VA_ARGS__)
 
 namespace utils {
 
