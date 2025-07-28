@@ -20,6 +20,7 @@
 #include "core/histogram.h"
 #include "db/db_factory.h"
 #include "db/keystats_db.h"
+#include "core/twitter_trace_workload.h"
 
 using namespace std;
 
@@ -27,13 +28,13 @@ void UsageMessage(const char *command);
 bool StrStartWith(const char *str, const char *pre);
 string ParseCommandLine(int argc, const char *argv[], utils::Properties &props);
 
-int DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const int num_ops,
+int DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const size_t num_ops,
     bool is_loading, shared_ptr<Histogram> hist) {
-  // db->Init();
-  ycsbc::Client client(*db, *wl);
+  db->Init();
+  ycsbc::Client client(*db, wl);
   int oks = 0;
   utils::Timer timer;
-  for (int i = 0; i < num_ops; ++i) {
+  for (size_t i = 0; i < num_ops; ++i) {
     timer.Reset();
     if (is_loading) {
       oks += client.DoInsert();
@@ -60,51 +61,49 @@ int main(const int argc, const char *argv[]) {
     exit(0);
   }
 
-  ycsbc::CoreWorkload wl;
-  wl.Init(props);
+  ycsbc::TwitterTraceWorkload *wl = new ycsbc::TwitterTraceWorkload();
+  wl->Init(props);
 
   // print some infos
-  std::cout << "fieldcount: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_COUNT_PROPERTY, ycsbc::CoreWorkload::FIELD_COUNT_DEFAULT) << std::endl;
-  std::cout << "fieldlength: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_LENGTH_PROPERTY, ycsbc::CoreWorkload::FIELD_LENGTH_DEFAULT) << std::endl;
-  std::cout << "zero_padding: " << props.GetProperty(ycsbc::CoreWorkload::ZERO_PADDING_PROPERTY, ycsbc::CoreWorkload::ZERO_PADDING_DEFAULT) << std::endl;
-  std::cout << "recordcount: " << props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY) << std::endl;
-  std::cout << "operationcount: " << props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY) << std::endl;
+  // std::cout << "fieldcount: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_COUNT_PROPERTY, ycsbc::CoreWorkload::FIELD_COUNT_DEFAULT) << std::endl;
+  // std::cout << "fieldlength: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_LENGTH_PROPERTY, ycsbc::CoreWorkload::FIELD_LENGTH_DEFAULT) << std::endl;
+  // std::cout << "zero_padding: " << props.GetProperty(ycsbc::CoreWorkload::ZERO_PADDING_PROPERTY, ycsbc::CoreWorkload::ZERO_PADDING_DEFAULT) << std::endl;
+  std::cout << "recordcount: " << wl->GetRecordCount() << std::endl;
+  std::cout << "operationcount: " << wl->GetOperationCount() << std::endl;
 
   const int num_threads = stoi(props.GetProperty("threadcount", "1"));
   vector<shared_ptr<Histogram>> hists;
   // Loads data
   utils::Timer timer;
   timer.Reset();
-  vector<future<int>> actual_ops;
-  int total_ops = stoi(props[ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY]);
-  // 跳过 Load 阶段
-  // for (int i = 0; i < num_threads; ++i) {
-  //   auto hist = make_shared<Histogram>();
-  //   hist->Clear();
-  //   hists.emplace_back(hist);
-  //   actual_ops.emplace_back(async(launch::async,
-  //       DelegateClient, db, &wl, total_ops / num_threads, true, hist));
-  // }
-  // assert((int)actual_ops.size() == num_threads);
+  vector<future<size_t>> actual_ops;
+  size_t total_ops = wl->GetRecordCount();
+  for (int i = 0; i < num_threads; ++i) {
+    auto hist = make_shared<Histogram>();
+    hist->Clear();
+    hists.emplace_back(hist);
+    actual_ops.emplace_back(async(launch::async,
+        DelegateClient, db, wl, total_ops / num_threads, true, hist));
+  }
+  assert(actual_ops.size() == (size_t)num_threads);
 
-  int sum = 0;
-  // for (auto &n : actual_ops) {
-  //   assert(n.valid());
-  //   sum += n.get();
-  // }
+  size_t sum = 0;
+  for (auto &n : actual_ops) {
+    assert(n.valid());
+    sum += n.get();
+  }
   double duration = timer.GetDurationMs();
   // Send Special Command
-  db->Init();
   db->Special("PAUSE");
-  // for (int i = 1; i < num_threads; i++) {
-  //   hists[0]->Merge(*hists[i]);
-  // }
-  // cout << "\n" << props["dbname"] << '\t' << file_name << '\t' << num_threads << '\n';
-  // cout << "# Load duration (sec): " << duration / 1000.0 << endl;
-  // cout << "# Loading records:\t" << sum << endl;
-  // cout << "# Load throughput (KOPS): ";
-  // cout << total_ops / duration << endl;
-  // cout << hists[0]->ToString() << endl;
+  for (int i = 1; i < num_threads; i++) {
+    hists[0]->Merge(*hists[i]);
+  }
+  cout << "\n" << props["dbname"] << '\t' << file_name << '\t' << num_threads << '\n';
+  cout << "# Load duration (sec): " << duration / 1000.0 << endl;
+  cout << "# Loading records:\t" << sum << endl;
+  cout << "# Load throughput (KOPS): ";
+  cout << total_ops / duration << endl;
+  cout << hists[0]->ToString() << endl;
 
   // // Load 与 Run 之间停 3 秒
   // std::cout << "Waiting 3s before performing transactions......" << std::endl;
@@ -115,7 +114,7 @@ int main(const int argc, const char *argv[]) {
   // Peforms transactions
   hists.clear();
   actual_ops.clear();
-  total_ops = stoi(props[ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY]);
+  total_ops = wl->GetOperationCount();
   
   timer.Reset();
   for (int i = 0; i < num_threads; ++i) {
@@ -123,9 +122,9 @@ int main(const int argc, const char *argv[]) {
     hist->Clear();
     hists.emplace_back(hist);
     actual_ops.emplace_back(async(launch::async,
-        DelegateClient, db, &wl, total_ops / num_threads, false, hist));
+        DelegateClient, db, wl, total_ops / num_threads, false, hist));
   }
-  assert((int)actual_ops.size() == num_threads);
+  assert(actual_ops.size() == (size_t)num_threads);
 
   sum = 0;
   for (auto &n : actual_ops) {
