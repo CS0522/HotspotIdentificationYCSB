@@ -5,21 +5,21 @@
     {
       "type": "lru",
       "params": {
-        "capacity": 15000
+        "capacity": 1000
       }
     },
     {
       "type": "lfu",
       "params": {
-        "capacity": 15000,
-        "min_freq": 10000
+        "capacity": 1000,
+        "min_freq": 1000
       }
     },
     {
       "type": "lruk",
       "params": {
         "k": 3,
-        "capacity": 15000
+        "capacity": 1000
       }
     },
     {
@@ -32,23 +32,23 @@
     {
       "type": "sketch_window",
       "params": {
-        "window_size": 20000,
+        "window_size": 1000,
         "epsilon": 0.001,
         "delta": 0.00001,
-        "threshold": 10,
+        "threshold": 3,
         "enable_lru": true
       }
     },
     {
       "type": "w_tinylfu",
       "params": {
-        "capacity": 15000
+        "capacity": 1000
       }
     },
     {
       "type": "lirs",
       "params": {
-        "capacity": 15000
+        "capacity": 1000
       }
     }
   ]

@@ -11,7 +11,6 @@ bool TwitterTraceReader::CheckThreadId(const size_t thread_id)
   return valid;
 }
 
-
 TwitterTraceReader::TwitterTraceReader(bool enable_mmap)
   : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr)
 {
@@ -43,7 +42,7 @@ TwitterTraceReader::TwitterTraceReader(bool enable_mmap, const std::string& trac
   : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr), 
     thread_count_(thread_count), thread_local_index_(thread_count)
 {
-  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d", enable_mmap_);
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader with multi-thread: %zu, enable mmap: %d", thread_count_, enable_mmap_);
   if (!this->enable_mmap_)
   {
     if (this->ReadTraceFile(trace_file_path))
@@ -274,7 +273,7 @@ Request* TwitterTraceReader::GetCurrentByThread(size_t thread_id)
 
   // local index
   size_t current_index = (thread_local_index_[thread_id].load(std::memory_order_relaxed));
-  size_t target_request_index = current_index * thread_count_ + thread_id;
+  size_t target_request_index = (current_index - 1) * thread_count_ + thread_id;
 
   // check if is valid
   if (target_request_index >= trace_requests_.size())

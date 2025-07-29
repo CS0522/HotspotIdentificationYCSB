@@ -28,10 +28,10 @@ void UsageMessage(const char *command);
 bool StrStartWith(const char *str, const char *pre);
 string ParseCommandLine(int argc, const char *argv[], utils::Properties &props);
 
-static bool g_workload_twitter = false;
+static bool g_enable_hotspot = false;
 
 size_t DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const size_t num_ops,
-    bool is_loading, shared_ptr<Histogram> hist) {
+    bool is_loading, shared_ptr<Histogram> hist, size_t thread_id) {
   db->Init();
   ycsbc::Client client(*db, wl);
   size_t oks = 0;
@@ -39,9 +39,9 @@ size_t DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const size_t num_o
   for (size_t i = 0; i < num_ops; ++i) {
     timer.Reset();
     if (is_loading) {
-      oks += client.DoInsert();
+      oks += client.DoInsert(thread_id);
     } else {
-      oks += client.DoTransaction();
+      oks += client.DoTransaction(thread_id);
     }
     double duration = timer.GetDurationUs();
     hist->Add(duration);
@@ -54,6 +54,9 @@ size_t DelegateClient(ycsbc::DB *db, ycsbc::CoreWorkload *wl, const size_t num_o
 }
 
 int main(const int argc, const char *argv[]) {
+#ifdef TWITTER_TRACE
+  YCSB_C_LOG_INFO("TWITTER_TRACE mode is enabled");
+#endif
   utils::Properties props;
   string file_name = ParseCommandLine(argc, argv, props);
 
@@ -62,46 +65,53 @@ int main(const int argc, const char *argv[]) {
     cout << "Unknown database name " << props["dbname"] << endl;
     exit(0);
   }
-  
-  ycsbc::CoreWorkload *wl = nullptr;
-  if (g_workload_twitter)
-    wl = new ycsbc::TwitterTraceWorkload();
-  else
-    wl = new ycsbc::CoreWorkload();
-  wl->Init(props);
 
-  // print some infos
-  if (g_workload_twitter)
+  if (props["dbname"] == "key_stats" && g_enable_hotspot)
   {
-    std::cout << "recordcount: " << ((ycsbc::TwitterTraceWorkload*)wl)->GetRecordCount() << std::endl;
-    std::cout << "operationcount: " << ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount() << std::endl;
-  }
-  else
-  {
-    std::cout << "fieldcount: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_COUNT_PROPERTY, ycsbc::CoreWorkload::FIELD_COUNT_DEFAULT) << std::endl;
-    std::cout << "fieldlength: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_LENGTH_PROPERTY, ycsbc::CoreWorkload::FIELD_LENGTH_DEFAULT) << std::endl;
-    std::cout << "zero_padding: " << props.GetProperty(ycsbc::CoreWorkload::ZERO_PADDING_PROPERTY, ycsbc::CoreWorkload::ZERO_PADDING_DEFAULT) << std::endl;
-    std::cout << "record_count: " << props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY) << std::endl;
-    std::cout << "operation_count: " << props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY) << std::endl;
+    auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);
+    keystats_db->SetHotspotEnabled(g_enable_hotspot);
   }
 
   const int num_threads = stoi(props.GetProperty("threadcount", "1"));
+  
+  ycsbc::CoreWorkload *wl = nullptr;
+#ifdef TWITTER_TRACE
+  wl = new ycsbc::TwitterTraceWorkload((size_t)num_threads);
+#else
+  wl = new ycsbc::CoreWorkload();
+#endif
+  wl->Init(props);
+
+  // print some infos
+#ifdef TWITTER_TRACE
+  std::cout << "recordcount: " << ((ycsbc::TwitterTraceWorkload*)wl)->GetRecordCount() << std::endl;
+  std::cout << "operationcount: " << ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount() << std::endl;
+#else
+  std::cout << "fieldcount: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_COUNT_PROPERTY, ycsbc::CoreWorkload::FIELD_COUNT_DEFAULT) << std::endl;
+  std::cout << "fieldlength: " << props.GetProperty(ycsbc::CoreWorkload::FIELD_LENGTH_PROPERTY, ycsbc::CoreWorkload::FIELD_LENGTH_DEFAULT) << std::endl;
+  std::cout << "zero_padding: " << props.GetProperty(ycsbc::CoreWorkload::ZERO_PADDING_PROPERTY, ycsbc::CoreWorkload::ZERO_PADDING_DEFAULT) << std::endl;
+  std::cout << "record_count: " << props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY) << std::endl;
+  std::cout << "operation_count: " << props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY) << std::endl;
+#endif
+
   vector<shared_ptr<Histogram>> hists;
   // Loads data
   utils::Timer timer;
   timer.Reset();
   vector<future<size_t>> actual_ops;
   size_t total_ops;
-  if (g_workload_twitter)
-    total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetRecordCount();
-  else
-    total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY));
+#ifdef TWITTER_TRACE
+  total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetRecordCount();
+#else
+  total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::RECORD_COUNT_PROPERTY));
+#endif
   for (int i = 0; i < num_threads; ++i) {
     auto hist = make_shared<Histogram>();
     hist->Clear();
     hists.emplace_back(hist);
+    // 传入 thread_id
     actual_ops.emplace_back(async(launch::async,
-        DelegateClient, db, wl, total_ops / num_threads, true, hist));
+        DelegateClient, db, wl, total_ops / num_threads, true, hist, static_cast<size_t>(i)));
   }
   assert(actual_ops.size() == (size_t)num_threads);
 
@@ -124,30 +134,28 @@ int main(const int argc, const char *argv[]) {
   cout << hists[0]->ToString() << endl;
 
   // // Load 与 Run 之间停 3 秒
-  // std::cout << "Waiting 3s before performing transactions......" << std::endl;
-  std::cout << "Skipped Load Stage, waiting 3s......" << std::endl;
+  std::cout << "Waiting 3s before performing transactions......" << std::endl;
+  // std::cout << "Skipped Load Stage, waiting 3s......" << std::endl;
   std::this_thread::sleep_for(std::chrono::seconds(3));
   std::cout << "Starting performing transactions......" << std::endl << std::endl;
 
   // Peforms transactions
   hists.clear();
   actual_ops.clear();
-  if (g_workload_twitter)
-  {
-    total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount();
-    // 使 Reader 迭代器归位
-    ((ycsbc::TwitterTraceWorkload*)wl)->ResetIterator();
-  }
-  else
-    total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY));
-  
+#ifdef TWITTER_TRACE
+  total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount();
+  // 使 Reader 迭代器归位
+  ((ycsbc::TwitterTraceWorkload*)wl)->ResetIterator();
+#else
+  total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY));
+#endif
   timer.Reset();
   for (int i = 0; i < num_threads; ++i) {
     auto hist = make_shared<Histogram>();
     hist->Clear();
     hists.emplace_back(hist);
     actual_ops.emplace_back(async(launch::async,
-        DelegateClient, db, wl, total_ops / num_threads, false, hist));
+        DelegateClient, db, wl, total_ops / num_threads, false, hist, static_cast<size_t>(i)));
   }
   assert(actual_ops.size() == (size_t)num_threads);
 
@@ -169,7 +177,7 @@ int main(const int argc, const char *argv[]) {
   cout << hists[0]->ToString() << endl;
   
   // Key 统计功能、显式转换后输出到文件
-  if (props["dbname"] == "key_stats")
+  if (props["dbname"] == "key_stats" && g_enable_hotspot)
   {
     auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);
     keystats_db->OutputStats();
@@ -199,16 +207,14 @@ string ParseCommandLine(int argc, const char *argv[], utils::Properties &props) 
       props.SetProperty("dbname", argv[argindex]);
       argindex++;
     }
-    // 添加 workload 参数
-    else if (strcmp(argv[argindex], "-workload") == 0) {
+    // 添加 hotspot 参数
+    else if (strcmp(argv[argindex], "-hotspot") == 0) {
       argindex++;
       if (argindex >= argc) {
         UsageMessage(argv[0]);
         exit(0);
       }
-      std::string workload_type(argv[argindex]);
-      if (workload_type == "twitter")
-        g_workload_twitter = true;
+      g_enable_hotspot = static_cast<bool>(std::stoi(argv[argindex]));
       argindex++;
     }
     // 添加 fieldlength 参数
@@ -318,7 +324,7 @@ void UsageMessage(const char *command) {
   cout << "Options:" << endl;
   cout << "  -threads n: execute using n threads (default: 1)" << endl;
   cout << "  -db dbname: specify the name of the DB to use (default: basic)" << endl;
-  cout << "  -workload workload type: 'core' or 'twitter'" << endl;
+  cout << "  -hotspot hotspot_identification: '0' for disabled, '1' for enabled" << endl;
   cout << "  -server server: (Deprecated) specify the server address, e.g. 127.0.0.1:50051" << endl;
   cout << "  -P propertyfile: load properties from the given file. Multiple files can" << endl;
   cout << "                   be specified, and will be processed in the order specified" << endl;

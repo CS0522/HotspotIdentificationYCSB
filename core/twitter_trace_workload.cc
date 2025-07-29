@@ -25,12 +25,17 @@ TwitterTraceWorkload::TwitterTraceWorkload()
   : CoreWorkload()
 {}
 
+TwitterTraceWorkload::TwitterTraceWorkload(const size_t thread_count)
+  : CoreWorkload(), thread_count_(thread_count)
+{}
+
 void TwitterTraceWorkload::Init(const utils::Properties &p) 
 { 
   YCSB_C_LOG_INFO("TwitterTraceWorkload is initializing......");
   
   std::string trace_file_path = p.GetProperty(TRACE_FILE_PROPERTY);
-  this->twitter_trace_reader_ = new module::TwitterTraceReader(false, trace_file_path);
+  size_t thread_count = std::stoul(p.GetProperty("threadcount", "1"));
+  this->twitter_trace_reader_ = new module::TwitterTraceReader(false, trace_file_path, thread_count);
 
   // usertable
   table_name_ = p.GetProperty(TABLENAME_PROPERTY, TABLENAME_DEFAULT);
@@ -59,43 +64,43 @@ void TwitterTraceWorkload::Init(const utils::Properties &p)
   YCSB_C_LOG_INFO("TwitterTraceWorkload is initialized");
 }
 
-void TwitterTraceWorkload::BuildValues(std::vector<ycsbc::DB::KVPair> &values) 
+void TwitterTraceWorkload::BuildValues(std::vector<ycsbc::DB::KVPair> &values, size_t thread_id) 
 {
   for (int i = 0; i < field_count_; ++i) 
   {
     ycsbc::DB::KVPair pair;
     pair.first.append("field").append(std::to_string(i));
     // 在这里根据 MaxValueSize 长度生成一个随机字符串
-    size_t max_value_size = this->twitter_trace_reader_->GetCurrentValueSize();
+    size_t max_value_size = this->twitter_trace_reader_->GetCurrentValueSizeByThread(thread_id);
     pair.second.append(max_value_size, utils::RandomPrintChar());
     values.push_back(pair);
   }
 }
 
-void TwitterTraceWorkload::BuildUpdate(std::vector<ycsbc::DB::KVPair> &update) {
+void TwitterTraceWorkload::BuildUpdate(std::vector<ycsbc::DB::KVPair> &update, size_t thread_id) {
   ycsbc::DB::KVPair pair;
   pair.first.append(NextFieldName());
   // 在这里根据 ValueSize 长度生成一个随机字符串
-  size_t value_size = this->twitter_trace_reader_->GetCurrentValueSize();
+  size_t value_size = this->twitter_trace_reader_->GetCurrentValueSizeByThread(thread_id);
   pair.second.append(value_size, utils::RandomPrintChar());
   update.push_back(pair);
 }
 
-inline std::string TwitterTraceWorkload::NextSequenceKey() 
+inline std::string TwitterTraceWorkload::NextSequenceKey(size_t thread_id) 
 {
   // may be null string
-  return this->twitter_trace_reader_->GetNextKey();
+  return this->twitter_trace_reader_->GetNextKeyByThread(thread_id);
 }
 
-inline std::string TwitterTraceWorkload::NextTransactionKey() 
+inline std::string TwitterTraceWorkload::NextTransactionKey(size_t thread_id) 
 {
   // may be null string
-  return this->twitter_trace_reader_->GetNextKey();
+  return this->twitter_trace_reader_->GetNextKeyByThread(thread_id);
 }
 
-inline Operation TwitterTraceWorkload::NextOperation()
+inline Operation TwitterTraceWorkload::NextOperation(size_t thread_id)
 {
-  module::TwitterTraceOperation twitter_trace_op = this->twitter_trace_reader_->GetOperation();
+  module::TwitterTraceOperation twitter_trace_op = this->twitter_trace_reader_->GetOperationByThread(thread_id);
   switch (twitter_trace_op) 
   {
     case module::TwitterTraceOperation::GET:

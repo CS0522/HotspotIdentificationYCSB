@@ -32,15 +32,15 @@ class TwitterTraceWorkload : public CoreWorkload
   
   virtual void Init(const utils::Properties &p);
   
-  virtual void BuildValues(std::vector<ycsbc::DB::KVPair> &values);
-  virtual void BuildUpdate(std::vector<ycsbc::DB::KVPair> &update);
+  virtual void BuildValues(std::vector<ycsbc::DB::KVPair> &values, size_t thread_id = 0);
+  virtual void BuildUpdate(std::vector<ycsbc::DB::KVPair> &update, size_t thread_id = 0);
   
   virtual std::string NextTable() { return table_name_; }
   /// Used for loading data
-  virtual std::string NextSequenceKey();
+  virtual std::string NextSequenceKey(size_t thread_id = 0);
   /// Used for transactions
-  virtual std::string NextTransactionKey();
-  virtual Operation NextOperation();
+  virtual std::string NextTransactionKey(size_t thread_id = 0);
+  virtual Operation NextOperation(size_t thread_id = 0);
   virtual std::string NextFieldName();
 
   bool read_all_fields() const { return true; }
@@ -52,6 +52,7 @@ class TwitterTraceWorkload : public CoreWorkload
   virtual void ResetIterator();
 
   TwitterTraceWorkload();
+  TwitterTraceWorkload(const size_t thread_count);
   ~TwitterTraceWorkload() {}
   
  protected:
@@ -60,6 +61,8 @@ class TwitterTraceWorkload : public CoreWorkload
   int field_count_;
   size_t record_count_;
   size_t operation_count_;
+
+  size_t thread_count_;
 
   module::TwitterTraceReader *twitter_trace_reader_ = nullptr;
 };

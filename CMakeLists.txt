@@ -14,6 +14,15 @@ if(DEBUG)
 endif()
 message(STATUS "*** DEBUG: ${DEBUG}")
 
+# TWITTER_TRACE mode
+# 一些信息内容输出
+# cmake -DTWITTER_TRACE=ON
+option(TWITTER_TRACE "twitter trace" OFF)
+if(TWITTER_TRACE)
+    add_definitions(-DTWITTER_TRACE)
+endif()
+message(STATUS "*** TWITTER_TRACE: ${TWITTER_TRACE}")
+
 find_package(Threads REQUIRED)
 
 # find TBB

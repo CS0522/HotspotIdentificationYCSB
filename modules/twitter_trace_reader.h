@@ -71,7 +71,7 @@ class TwitterTraceReader
 private:
   std::vector<Request> trace_requests_;
 
-  // 单线程
+  // 单线程（已弃用）
   std::vector<Request>::iterator trace_iter_;
   Request* curr_request_ptr_ = nullptr;
 
