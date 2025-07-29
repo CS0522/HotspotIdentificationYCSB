@@ -2,6 +2,16 @@
 
 namespace module
 {
+bool TwitterTraceReader::CheckThreadId(const size_t thread_id)
+{
+  bool valid = (thread_id < thread_count_);
+  if (!valid)
+    YCSB_C_LOG_ERROR("thread_id: %zu is out of range", thread_id);
+  
+  return valid;
+}
+
+
 TwitterTraceReader::TwitterTraceReader(bool enable_mmap)
   : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr)
 {
@@ -26,6 +36,32 @@ TwitterTraceReader::TwitterTraceReader(bool enable_mmap, const std::string& trac
     else
       std::runtime_error("Read trace file failed\n");
   }
+}
+
+TwitterTraceReader::TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path, 
+                                       const size_t thread_count)
+  : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr), 
+    thread_count_(thread_count), thread_local_index_(thread_count)
+{
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d", enable_mmap_);
+  if (!this->enable_mmap_)
+  {
+    if (this->ReadTraceFile(trace_file_path))
+      YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
+    else
+      std::runtime_error("Read trace file failed\n");
+  }
+  else
+  {
+    if (this->ReadTraceFileByMmap(trace_file_path))
+      YCSB_C_LOG_INFO("Read (by mmap) trace file: %s completed", trace_file_path.c_str());
+    else
+      std::runtime_error("Read trace file failed\n");
+  }
+
+  // 初始化多线程索引计数
+  for (auto& index : thread_local_index_)
+    index.store(0, std::memory_order_relaxed);
 }
 
 bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const char delimiter)
@@ -143,6 +179,7 @@ Request* TwitterTraceReader::JumpToLast()
 
   return nullptr;
 }
+
 Request* TwitterTraceReader::GetNext()
 {
   if (this->trace_requests_.empty())
@@ -164,31 +201,65 @@ Request* TwitterTraceReader::GetNext()
   return nullptr;
 }
 
+Request* TwitterTraceReader::GetNextByThread(size_t thread_id)
+{
+  if (!CheckThreadId(thread_id))
+    exit(EXIT_FAILURE);
+
+  // local index
+  size_t current_index = (thread_local_index_[thread_id].fetch_add(1, std::memory_order_relaxed));
+  size_t target_request_index = current_index * thread_count_ + thread_id;
+  // check if is valid
+  if (target_request_index >= trace_requests_.size())
+    // maybe this thread's work is done
+    return nullptr;
+
+  return &trace_requests_[target_request_index];
+}
+
 std::string TwitterTraceReader::GetNextKey()
 {
   std::string next_key = this->GetNext()->anonymized_key;
   return next_key;
 }
 
-TwitterTraceOperation TwitterTraceReader::GetNextOperationWithoutForward()
+std::string TwitterTraceReader::GetNextKeyByThread(size_t thread_id)
 {
-  // Run 阶段重放 Trace，iterator 重新归位
-  if (!this->replay_)
-  {
-    this->trace_iter_ = this->trace_requests_.begin();
-    this->replay_ = true;
-  }
+  auto next_req_ptr = this->GetNextByThread(thread_id);
+  std::string next_key;
+  if (next_req_ptr)
+    next_key = next_req_ptr->anonymized_key;
+  return next_key;
+}
 
+TwitterTraceOperation TwitterTraceReader::GetOperation()
+{
   if (!this->enable_mmap_)
   {
     if (this->trace_iter_ == this->trace_requests_.end())
       this->trace_iter_ = this->trace_requests_.begin();
     
-    Request* next_req = &(*(std::next(this->trace_iter_)));
-    TwitterTraceOperation next_operation = next_req->operation;
-    return next_operation;
+    Request* req = &(*(this->trace_iter_));
+    TwitterTraceOperation op = req->operation;
+    return op;
   }
   return TwitterTraceOperation::SET;
+}
+
+TwitterTraceOperation TwitterTraceReader::GetOperationByThread(size_t thread_id)
+{
+  if (!CheckThreadId(thread_id))
+    exit(EXIT_FAILURE);
+
+  // local index
+  size_t current_index = (thread_local_index_[thread_id].load(std::memory_order_relaxed));
+  size_t target_request_index = current_index * thread_count_ + thread_id;
+
+  TwitterTraceOperation op = TwitterTraceOperation::GET;
+  if (target_request_index < trace_requests_.size())
+    op = trace_requests_[target_request_index].operation;
+  return op;
+  // 这里缺少处理越界场景
 }
 
 Request* TwitterTraceReader::GetCurrent()
@@ -196,9 +267,32 @@ Request* TwitterTraceReader::GetCurrent()
   return this->curr_request_ptr_;
 }
 
+Request* TwitterTraceReader::GetCurrentByThread(size_t thread_id)
+{
+  if (!CheckThreadId(thread_id))
+    exit(EXIT_FAILURE);
+
+  // local index
+  size_t current_index = (thread_local_index_[thread_id].load(std::memory_order_relaxed));
+  size_t target_request_index = current_index * thread_count_ + thread_id;
+
+  // check if is valid
+  if (target_request_index >= trace_requests_.size())
+    // maybe this thread's work is done
+    return nullptr;
+
+  return &trace_requests_[target_request_index];
+}
+
 size_t TwitterTraceReader::GetCurrentValueSize()
 {
   return ((this->curr_request_ptr_) ? this->curr_request_ptr_->value_size : 0);
+}
+
+size_t TwitterTraceReader::GetCurrentValueSizeByThread(size_t thread_id)
+{
+  auto current_req_ptr = GetCurrentByThread(thread_id);
+  return ((current_req_ptr) ? current_req_ptr->value_size: 0);
 }
 
 size_t TwitterTraceReader::GetCurrentKeySize()
@@ -206,9 +300,21 @@ size_t TwitterTraceReader::GetCurrentKeySize()
   return ((this->curr_request_ptr_) ? this->curr_request_ptr_->key_size : 0);
 }
 
+size_t TwitterTraceReader::GetCurrentKeySizeByThread(size_t thread_id)
+{
+  auto current_req_ptr = GetCurrentByThread(thread_id);
+  return ((current_req_ptr) ? current_req_ptr->key_size : 0);
+}
+
 std::string TwitterTraceReader::GetCurrentKey()
 {
   return ((this->curr_request_ptr_) ? this->curr_request_ptr_->anonymized_key : "");
+}
+
+std::string TwitterTraceReader::GetCurrentKeyByThread(size_t thread_id)
+{
+  auto current_req_ptr = GetCurrentByThread(thread_id);
+  return ((current_req_ptr) ? current_req_ptr->anonymized_key : "");
 }
 
 Request* TwitterTraceReader::GetPrev()
@@ -232,31 +338,44 @@ Request* TwitterTraceReader::GetPrev()
   return nullptr;
 }
 
+Request* TwitterTraceReader::GetPrevByThread(size_t thread_id)
+{
+  if (!CheckThreadId(thread_id))
+    exit(EXIT_FAILURE);
+
+  // local index
+  size_t current_index = (thread_local_index_[thread_id].fetch_sub(1, std::memory_order_relaxed));
+  size_t target_request_index = current_index * thread_count_ + thread_id;
+  // check if is valid
+  if (target_request_index >= trace_requests_.size() || target_request_index < 0)
+    // maybe this thread's work is done
+    return nullptr;
+
+  return &trace_requests_[target_request_index];
+}
+
 std::string TwitterTraceReader::GetPrevKey()
 {
   std::string prev_key = this->GetPrev()->anonymized_key;
   return prev_key;
 }
 
-TwitterTraceOperation TwitterTraceReader::GetPrevOperationWithoutBackward()
+std::string TwitterTraceReader::GetPrevKeyByThread(size_t thread_id)
+{
+  auto prev_req_ptr = this->GetNextByThread(thread_id);
+  std::string prev_key;
+  if (prev_req_ptr)
+    prev_key = prev_req_ptr->anonymized_key;
+  return prev_key;
+}
+
+void TwitterTraceReader::ResetIterator()
 {
   // Run 阶段重放 Trace，iterator 重新归位
-  if (!this->replay_)
-  {
-    this->trace_iter_ = std::prev(this->trace_requests_.end());
-    this->replay_ = true;
-  }
+  this->trace_iter_ = this->trace_requests_.begin();
 
-  if (!this->enable_mmap_)
-  {
-    if (this->trace_iter_ == this->trace_requests_.end()) 
-      this->trace_iter_ = std::prev(this->trace_requests_.end());
-    
-    Request* prev_req = &(*(std::prev(this->trace_iter_)));
-    TwitterTraceOperation prev_operation = prev_req->operation;
-    return prev_operation;
-  }
-  return TwitterTraceOperation::SET;
+  for (auto& index : this->thread_local_index_) 
+    index.store(0, std::memory_order_relaxed);
 }
 
 void TwitterTraceReader::TraverseTrace()

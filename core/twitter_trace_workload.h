@@ -24,6 +24,9 @@ class TwitterTraceWorkload : public CoreWorkload
   static const std::string FIELD_COUNT_PROPERTY;
   static const std::string FIELD_COUNT_DEFAULT;
 
+  static const std::string RECORD_COUNT_PROPERTY;
+  static const std::string OPERATION_COUNT_PROPERTY;
+
   // Add trace file property
   static const std::string TRACE_FILE_PROPERTY;
   
@@ -45,6 +48,8 @@ class TwitterTraceWorkload : public CoreWorkload
 
   virtual size_t GetRecordCount();
   virtual size_t GetOperationCount();
+
+  virtual void ResetIterator();
 
   TwitterTraceWorkload();
   ~TwitterTraceWorkload() {}

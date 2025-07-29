@@ -61,26 +61,39 @@ struct Request
   uint32_t ttl;
 };
 
-
+/**
+ * 读取 Twitter Cache-trace
+ * 采用分片读取方式，每个线程读取自己范围（交错读取）
+ * 缺点是无法保序（Trace 中顺序）
+ */
 class TwitterTraceReader
 {
 private:
   std::vector<Request> trace_requests_;
+
+  // 单线程
   std::vector<Request>::iterator trace_iter_;
   Request* curr_request_ptr_ = nullptr;
+
+  // 多线程
+  size_t thread_count_;
+  // 多线程局部索引计数
+  std::vector<std::atomic<size_t>> thread_local_index_;
   
   bool read_succeeded_ = false;
   bool enable_mmap_ = false;
+  
   // TODO
   void* mmap_reader_ptr_ = nullptr;
 
-  bool replay_ = false;
+  bool CheckThreadId(const size_t thread_id);
 
 public:
   TwitterTraceReader(bool enable_mmap);
   TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path);
+  TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path, const size_t thread_count);
 
-  // @brief 内存够大情况下直接读入内存
+  // @brief 内存够大情况下直接读入内存，单线程
   bool ReadTraceFile(const std::string& trace_file_path, const char delimiter = ',');
   // @brief 返回请求数组
   bool GetTraceRequests(std::vector<Request>& requests);
@@ -91,24 +104,40 @@ public:
   // TODO
   bool ReadTraceFileByMmap(const std::string& trace_file_path);
 
+  // only single-thread
   Request* JumpToFirst();
+  // only single-thread
   Request* JumpToLast();
   Request* GetNext();
+  Request* GetNextByThread(size_t thread_id);
   std::string GetNextKey();
-  TwitterTraceOperation GetNextOperationWithoutForward();
+  std::string GetNextKeyByThread(size_t thread_id);
+  
   Request* GetCurrent();
+  Request* GetCurrentByThread(size_t thread_id);
   size_t GetCurrentValueSize();
+  size_t GetCurrentValueSizeByThread(size_t thread_id);
   size_t GetCurrentKeySize();
+  size_t GetCurrentKeySizeByThread(size_t thread_id);
   std::string GetCurrentKey();
+  std::string GetCurrentKeyByThread(size_t thread_id);
+  
   Request* GetPrev();
+  Request* GetPrevByThread(size_t thread_id);
   std::string GetPrevKey();
-  TwitterTraceOperation GetPrevOperationWithoutBackward();
+  std::string GetPrevKeyByThread(size_t thread_id);
 
+  TwitterTraceOperation GetOperation();
+  TwitterTraceOperation GetOperationByThread(size_t thread_id);
+
+  void ResetIterator();
+
+  // 单线程
   void TraverseTrace();
 };
 
 void DisplayRequest(const Request& req);
 
-}
+};
 
 #endif

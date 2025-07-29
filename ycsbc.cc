@@ -133,7 +133,11 @@ int main(const int argc, const char *argv[]) {
   hists.clear();
   actual_ops.clear();
   if (g_workload_twitter)
+  {
     total_ops = ((ycsbc::TwitterTraceWorkload*)wl)->GetOperationCount();
+    // 使 Reader 迭代器归位
+    ((ycsbc::TwitterTraceWorkload*)wl)->ResetIterator();
+  }
   else
     total_ops = std::stoul(props.GetProperty(ycsbc::CoreWorkload::OPERATION_COUNT_PROPERTY));
   

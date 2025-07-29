@@ -17,6 +17,9 @@ const string TwitterTraceWorkload::FIELD_COUNT_DEFAULT = "1";
 
 const string TwitterTraceWorkload::TRACE_FILE_PROPERTY = "tracefile";
 
+const string TwitterTraceWorkload::RECORD_COUNT_PROPERTY = "recordcount";
+const string TwitterTraceWorkload::OPERATION_COUNT_PROPERTY = "operationcount";
+
 
 TwitterTraceWorkload::TwitterTraceWorkload()
   : CoreWorkload()
@@ -35,15 +38,25 @@ void TwitterTraceWorkload::Init(const utils::Properties &p)
   field_count_ = std::stoi(p.GetProperty(FIELD_COUNT_PROPERTY,
                                          FIELD_COUNT_DEFAULT));
   // get record, operation count from TwitterTraceReader
-  record_count_ = this->twitter_trace_reader_->GetAllRequestsCount();
-  operation_count_ = record_count_;
+  // record_count_ = this->twitter_trace_reader_->GetAllRequestsCount();
+  // operation_count_ = record_count_;
+  // 比较配置文件里的设定值 和 trace 文件中的总数取最小
+  size_t trace_max_requests_count = this->twitter_trace_reader_->GetAllRequestsCount();
+  size_t record_count_in_config = std::stoul(p.GetProperty(RECORD_COUNT_PROPERTY));
+  size_t operation_count_in_config = std::stoul(p.GetProperty(OPERATION_COUNT_PROPERTY));
+  if (record_count_in_config)
+    this->record_count_ = std::min(trace_max_requests_count, record_count_in_config);
+  else
+    this->record_count_ = trace_max_requests_count;
+  if (operation_count_in_config)
+    this->operation_count_ = std::min(trace_max_requests_count, operation_count_in_config);
+  else
+    this->operation_count_ = trace_max_requests_count;
 
   // jump to first request
-  this->twitter_trace_reader_->JumpToFirst();
+  this->twitter_trace_reader_->ResetIterator();
 
   YCSB_C_LOG_INFO("TwitterTraceWorkload is initialized");
-  // YCSB_C_LOG_INFO("\ttable_name: %s", table_name_.c_str());
-  // YCSB_C_LOG_INFO("\trecord_count: %zu", record_count_);
 }
 
 void TwitterTraceWorkload::BuildValues(std::vector<ycsbc::DB::KVPair> &values) 
@@ -82,7 +95,7 @@ inline std::string TwitterTraceWorkload::NextTransactionKey()
 
 inline Operation TwitterTraceWorkload::NextOperation()
 {
-  module::TwitterTraceOperation twitter_trace_op = this->twitter_trace_reader_->GetNextOperationWithoutForward();
+  module::TwitterTraceOperation twitter_trace_op = this->twitter_trace_reader_->GetOperation();
   switch (twitter_trace_op) 
   {
     case module::TwitterTraceOperation::GET:
@@ -117,4 +130,9 @@ inline size_t TwitterTraceWorkload::GetRecordCount()
 inline size_t TwitterTraceWorkload::GetOperationCount()
 {
   return this->operation_count_;
+}
+
+inline void TwitterTraceWorkload::ResetIterator()
+{
+  this->twitter_trace_reader_->ResetIterator();
 }
