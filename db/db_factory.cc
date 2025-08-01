@@ -35,8 +35,8 @@ DB* DBFactory::CreateDB(utils::Properties &props) {
     std::filesystem::create_directories(rocksdb_path);
     return nullptr;
   }
-  // 对 Key 分布统计时，使用 key_stats
-  else if (props["dbname"] == "key_stats")
+  // 对 Key 分布统计时，使用 keystats
+  else if (props["dbname"] == "keystats")
   {
     return new KeyStatsDB;
   } else {

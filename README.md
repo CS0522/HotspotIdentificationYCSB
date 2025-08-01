@@ -24,6 +24,6 @@ files in the workloads dir.
 
 ## 新增
 
-* `key_stats` Key 数据统计信息模块，作为 `-db` 参数；
+* `keystats` Key 数据统计信息模块，作为 `-db` 参数；
 
 * `modules/` 下新增热点识别算法模块。

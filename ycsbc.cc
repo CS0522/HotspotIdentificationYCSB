@@ -66,7 +66,7 @@ int main(const int argc, const char *argv[]) {
     exit(0);
   }
 
-  if (props["dbname"] == "key_stats" && g_enable_hotspot)
+  if (props["dbname"] == "keystats" && g_enable_hotspot)
   {
     auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);
     keystats_db->SetHotspotEnabled(g_enable_hotspot);
@@ -177,7 +177,7 @@ int main(const int argc, const char *argv[]) {
   cout << hists[0]->ToString() << endl;
   
   // Key 统计功能、显式转换后输出到文件
-  if (props["dbname"] == "key_stats" && g_enable_hotspot)
+  if (props["dbname"] == "keystats" && g_enable_hotspot)
   {
     auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);
     keystats_db->OutputStats();
