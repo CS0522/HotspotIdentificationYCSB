@@ -49,16 +49,17 @@ static const std::unordered_map<std::string, TwitterTraceOperation> g_op_map =
   {"decr", TwitterTraceOperation::DECR}
 };
 
+// 目前只需要 key、key_size、value_size、operation
 struct Request
 {
-  uint64_t timestamp;
+  // uint64_t timestamp;
   std::string anonymized_key;
   // key_size = len(anonymized_key)
   uint32_t key_size;
   uint32_t value_size;
-  uint32_t client_id;
+  // uint32_t client_id;
   TwitterTraceOperation operation;
-  uint32_t ttl;
+  // uint32_t ttl;
 };
 
 /**
@@ -71,6 +72,9 @@ class TwitterTraceReader
 private:
   std::vector<Request> trace_requests_;
 
+  size_t limit_record_count_ = 0;
+  size_t limit_operation_count_ = 0;
+
   // 单线程（已弃用）
   std::vector<Request>::iterator trace_iter_;
   Request* curr_request_ptr_ = nullptr;
@@ -81,17 +85,15 @@ private:
   std::vector<std::atomic<size_t>> thread_local_index_;
   
   bool read_succeeded_ = false;
-  bool enable_mmap_ = false;
-  
-  // TODO
-  void* mmap_reader_ptr_ = nullptr;
 
   bool CheckThreadId(const size_t thread_id);
 
 public:
-  TwitterTraceReader(bool enable_mmap);
-  TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path);
-  TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path, const size_t thread_count);
+  TwitterTraceReader();
+  TwitterTraceReader(const std::string& trace_file_path);
+  TwitterTraceReader(const std::string& trace_file_path, const size_t thread_count);
+  TwitterTraceReader(const std::string& trace_file_path, const size_t thread_count, 
+                      const size_t limit_record_count, const size_t limit_operation_count);
 
   // @brief 内存够大情况下直接读入内存，单线程
   bool ReadTraceFile(const std::string& trace_file_path, const char delimiter = ',');
@@ -99,10 +101,6 @@ public:
   bool GetTraceRequests(std::vector<Request>& requests);
   // @brief 返回 Trace 中所有请求个数（操作数）
   size_t GetAllRequestsCount();
-
-  // @brief 通过内存指针方式读取数据
-  // TODO
-  bool ReadTraceFileByMmap(const std::string& trace_file_path);
 
   // only single-thread
   Request* JumpToFirst();

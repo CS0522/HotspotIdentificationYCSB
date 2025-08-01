@@ -11,52 +11,47 @@ bool TwitterTraceReader::CheckThreadId(const size_t thread_id)
   return valid;
 }
 
-TwitterTraceReader::TwitterTraceReader(bool enable_mmap)
-  : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr)
+TwitterTraceReader::TwitterTraceReader()
 {
-  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d", enable_mmap_);
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader initialized");
 }
 
-TwitterTraceReader::TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path)
-  : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr)
+TwitterTraceReader::TwitterTraceReader(const std::string& trace_file_path)
 {
-  YCSB_C_LOG_INFO("Twitter Cache-trace reader, enable mmap: %d", enable_mmap_);
-  if (!this->enable_mmap_)
-  {
-    if (this->ReadTraceFile(trace_file_path))
-      YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
-    else
-      std::runtime_error("Read trace file failed\n");
-  }
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader initialized");
+  if (this->ReadTraceFile(trace_file_path))
+    YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
   else
-  {
-    if (this->ReadTraceFileByMmap(trace_file_path))
-      YCSB_C_LOG_INFO("Read (by mmap) trace file: %s completed", trace_file_path.c_str());
-    else
-      std::runtime_error("Read trace file failed\n");
-  }
+    std::runtime_error("Read trace file failed\n");
 }
 
-TwitterTraceReader::TwitterTraceReader(bool enable_mmap, const std::string& trace_file_path, 
+TwitterTraceReader::TwitterTraceReader(const std::string& trace_file_path, 
                                        const size_t thread_count)
-  : enable_mmap_(enable_mmap), mmap_reader_ptr_(nullptr), 
-    thread_count_(thread_count), thread_local_index_(thread_count)
+  : thread_count_(thread_count), thread_local_index_(thread_count)
 {
-  YCSB_C_LOG_INFO("Twitter Cache-trace reader with multi-thread: %zu, enable mmap: %d", thread_count_, enable_mmap_);
-  if (!this->enable_mmap_)
-  {
-    if (this->ReadTraceFile(trace_file_path))
-      YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
-    else
-      std::runtime_error("Read trace file failed\n");
-  }
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader with multi-thread: %zu", thread_count_);
+  if (this->ReadTraceFile(trace_file_path))
+    YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
   else
-  {
-    if (this->ReadTraceFileByMmap(trace_file_path))
-      YCSB_C_LOG_INFO("Read (by mmap) trace file: %s completed", trace_file_path.c_str());
-    else
-      std::runtime_error("Read trace file failed\n");
-  }
+    std::runtime_error("Read trace file failed\n");
+
+  // 初始化多线程索引计数
+  for (auto& index : thread_local_index_)
+    index.store(0, std::memory_order_relaxed);
+}
+
+TwitterTraceReader::TwitterTraceReader(const std::string& trace_file_path, const size_t thread_count, 
+                                       const size_t limit_record_count, const size_t limit_operation_count)
+  : thread_count_(thread_count), thread_local_index_(thread_count),
+    limit_record_count_(limit_record_count), limit_operation_count_(limit_operation_count)
+
+{
+  YCSB_C_LOG_INFO("Twitter Cache-trace reader with multi-thread: %zu", thread_count_);
+
+  if (this->ReadTraceFile(trace_file_path))
+    YCSB_C_LOG_INFO("Read trace file: %s completed", trace_file_path.c_str());
+  else
+    std::runtime_error("Read trace file failed\n");
 
   // 初始化多线程索引计数
   for (auto& index : thread_local_index_)
@@ -75,8 +70,15 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
   std::string line;
   size_t line_cnt = 0;
   bool no_error = true;
+  size_t max_read_line_cnt = 0;
+  // 节约内存资源，只读取指定范围的 trace
+  if ((this->limit_record_count_ || this->limit_operation_count_))
+    max_read_line_cnt = std::max(this->limit_record_count_, this->limit_operation_count_);
   while (std::getline(trace_file, line))
   {
+    if (line_cnt >= max_read_line_cnt)
+      break;
+    
     line_cnt++;
     if (line.empty())
       continue;
@@ -97,7 +99,7 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
     {
       Request req;
       // timestamp field
-      req.timestamp = static_cast<uint64_t>(std::stoul(fields[0]));
+      // req.timestamp = static_cast<uint64_t>(std::stoul(fields[0]));
       // anonymized_key field
       req.anonymized_key = fields[1];
       // key_size field
@@ -105,14 +107,14 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
       // value_size field
       req.value_size = static_cast<uint32_t>(std::stoul(fields[3]));
       // client_id field
-      req.client_id = static_cast<uint32_t>(std::stoul(fields[4]));
+      // req.client_id = static_cast<uint32_t>(std::stoul(fields[4]));
       // operation field (default: SET)
       auto op_iter = g_op_map.find(fields[5]);
       req.operation = (op_iter != g_op_map.end()) 
           ? op_iter->second 
           : TwitterTraceOperation::SET;
       // ttl field
-      req.ttl = static_cast<uint32_t>(std::stoul(fields[6]));
+      // req.ttl = static_cast<uint32_t>(std::stoul(fields[6]));
       this->trace_requests_.push_back(req);
     }
     catch(const std::exception& e)
@@ -132,51 +134,31 @@ bool TwitterTraceReader::ReadTraceFile(const std::string& trace_file_path, const
 
 bool TwitterTraceReader::GetTraceRequests(std::vector<Request>& requests)
 {
-  if (!this->enable_mmap_)
-    requests = this->trace_requests_;
+  requests = this->trace_requests_;
   return true;
 }
 
 size_t TwitterTraceReader::GetAllRequestsCount()
 {
-  if (!this->enable_mmap_)
-    return this->trace_requests_.size();
-  return 0;
-}
-
-bool TwitterTraceReader::ReadTraceFileByMmap(const std::string& trace_file_path)
-{
-  if (!this->enable_mmap_)
-  {
-    YCSB_C_LOG_ERROR("Invoked ReadTraceFileByMmap(), but 'enable_mmap' is false. Invoking ReadTraceFile() instead...");
-    return this->ReadTraceFile(trace_file_path);
-  }
-  
-  return false;
+  return this->trace_requests_.size();
 }
 
 Request* TwitterTraceReader::JumpToFirst()
 {
-  if (!this->enable_mmap_)
-  {
-    this->trace_iter_ = this->trace_requests_.begin();
-    this->curr_request_ptr_ = &(*(this->trace_iter_));
-    return curr_request_ptr_;
-  }
-  
-  return nullptr;
+  for (auto& index : this->thread_local_index_) 
+    index.store(0, std::memory_order_relaxed);
+
+  this->trace_iter_ = this->trace_requests_.begin();
+  this->curr_request_ptr_ = &(*(this->trace_iter_));
+  return curr_request_ptr_;
 }
+
 Request* TwitterTraceReader::JumpToLast()
 {
-  if (!this->enable_mmap_)
-  {
-    this->trace_iter_ = this->trace_requests_.end();
-    this->trace_iter_--;
-    this->curr_request_ptr_ = &(*(this->trace_iter_));
-    return curr_request_ptr_;
-  }
-
-  return nullptr;
+  this->trace_iter_ = this->trace_requests_.end();
+  this->trace_iter_--;
+  this->curr_request_ptr_ = &(*(this->trace_iter_));
+  return curr_request_ptr_;
 }
 
 Request* TwitterTraceReader::GetNext()
@@ -184,20 +166,15 @@ Request* TwitterTraceReader::GetNext()
   if (this->trace_requests_.empty())
     return nullptr;
   
-  if (!this->enable_mmap_)
-  {
-    if (this->trace_iter_ == this->trace_requests_.end())
-      this->trace_iter_ = this->trace_requests_.begin();
-    
-    this->curr_request_ptr_ = &(*(this->trace_iter_));
-    // remove to the next position
-    if (std::next(this->trace_iter_) != this->trace_requests_.end())
-      this->trace_iter_++;
-    
-    return curr_request_ptr_;
-  }
-
-  return nullptr;
+  if (this->trace_iter_ == this->trace_requests_.end())
+    this->trace_iter_ = this->trace_requests_.begin();
+  
+  this->curr_request_ptr_ = &(*(this->trace_iter_));
+  // remove to the next position
+  if (std::next(this->trace_iter_) != this->trace_requests_.end())
+    this->trace_iter_++;
+  
+  return curr_request_ptr_;
 }
 
 Request* TwitterTraceReader::GetNextByThread(size_t thread_id)
@@ -233,16 +210,12 @@ std::string TwitterTraceReader::GetNextKeyByThread(size_t thread_id)
 
 TwitterTraceOperation TwitterTraceReader::GetOperation()
 {
-  if (!this->enable_mmap_)
-  {
-    if (this->trace_iter_ == this->trace_requests_.end())
-      this->trace_iter_ = this->trace_requests_.begin();
-    
-    Request* req = &(*(this->trace_iter_));
-    TwitterTraceOperation op = req->operation;
-    return op;
-  }
-  return TwitterTraceOperation::SET;
+  if (this->trace_iter_ == this->trace_requests_.end())
+    this->trace_iter_ = this->trace_requests_.begin();
+  
+  Request* req = &(*(this->trace_iter_));
+  TwitterTraceOperation op = req->operation;
+  return op;
 }
 
 TwitterTraceOperation TwitterTraceReader::GetOperationByThread(size_t thread_id)
@@ -321,20 +294,15 @@ Request* TwitterTraceReader::GetPrev()
   if (this->trace_requests_.empty())
     return nullptr;
   
-  if (!this->enable_mmap_)
-  {
-    if (this->trace_iter_ == this->trace_requests_.end()) 
-      this->trace_iter_ = std::prev(this->trace_requests_.end());
-    
-    this->curr_request_ptr_ = &(*(this->trace_iter_));
-    // remove to the previous position
-    if (this->trace_iter_ != this->trace_requests_.begin())
-      this->trace_iter_--;
-    
-    return this->curr_request_ptr_;
-  }
-
-  return nullptr;
+  if (this->trace_iter_ == this->trace_requests_.end()) 
+    this->trace_iter_ = std::prev(this->trace_requests_.end());
+  
+  this->curr_request_ptr_ = &(*(this->trace_iter_));
+  // remove to the previous position
+  if (this->trace_iter_ != this->trace_requests_.begin())
+    this->trace_iter_--;
+  
+  return this->curr_request_ptr_;
 }
 
 Request* TwitterTraceReader::GetPrevByThread(size_t thread_id)
@@ -382,28 +350,34 @@ void TwitterTraceReader::TraverseTrace()
   if (!this->read_succeeded_)
     return;
 
-  if (!this->enable_mmap_)
+  this->JumpToFirst();
+  while (this->trace_iter_ != this->trace_requests_.end())
   {
-    this->JumpToFirst();
-    while (this->trace_iter_ != this->trace_requests_.end())
-    {
-      std::cout << this->trace_iter_->timestamp << ", " << this->trace_iter_->anonymized_key
-                << ", " << this->trace_iter_->key_size << ", " << this->trace_iter_->value_size
-                << ", " << this->trace_iter_->client_id << ", " << this->trace_iter_->operation
-                << ", " << this->trace_iter_->ttl << std::endl;
-  
-      this->trace_iter_++;
-    }
-    this->JumpToFirst();
+    // std::cout << this->trace_iter_->timestamp << ", " << this->trace_iter_->anonymized_key
+    //           << ", " << this->trace_iter_->key_size << ", " << this->trace_iter_->value_size
+    //           << ", " << this->trace_iter_->client_id << ", " << this->trace_iter_->operation
+    //           << ", " << this->trace_iter_->ttl << std::endl;
+
+    std::cout << this->trace_iter_->anonymized_key
+              << ", " << this->trace_iter_->key_size << ", " << this->trace_iter_->value_size
+              << ", " << this->trace_iter_->operation
+              << std::endl;
+
+    this->trace_iter_++;
   }
+  this->JumpToFirst();
 }
 
 inline void DisplayRequest(const Request& req)
 {
-  std::cout << req.timestamp << ", " << req.anonymized_key
+  // std::cout << req.timestamp << ", " << req.anonymized_key
+  //           << ", " << req.key_size << ", " << req.value_size
+  //           << ", " << req.client_id << ", " << req.operation
+  //           << ", " << req.ttl << std::endl;
+  std::cout << req.anonymized_key
             << ", " << req.key_size << ", " << req.value_size
-            << ", " << req.client_id << ", " << req.operation
-            << ", " << req.ttl << std::endl;
+            << ", " << req.operation
+            << std::endl;
 }
 
 }

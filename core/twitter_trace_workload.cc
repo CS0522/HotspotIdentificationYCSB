@@ -35,7 +35,6 @@ void TwitterTraceWorkload::Init(const utils::Properties &p)
   
   std::string trace_file_path = p.GetProperty(TRACE_FILE_PROPERTY);
   size_t thread_count = std::stoul(p.GetProperty("threadcount", "1"));
-  this->twitter_trace_reader_ = new module::TwitterTraceReader(false, trace_file_path, thread_count);
 
   // usertable
   table_name_ = p.GetProperty(TABLENAME_PROPERTY, TABLENAME_DEFAULT);
@@ -43,21 +42,10 @@ void TwitterTraceWorkload::Init(const utils::Properties &p)
   field_count_ = std::stoi(p.GetProperty(FIELD_COUNT_PROPERTY,
                                          FIELD_COUNT_DEFAULT));
   // get record, operation count from TwitterTraceReader
-  // record_count_ = this->twitter_trace_reader_->GetAllRequestsCount();
-  // operation_count_ = record_count_;
-  // 比较配置文件里的设定值 和 trace 文件中的总数取最小
-  size_t trace_max_requests_count = this->twitter_trace_reader_->GetAllRequestsCount();
-  size_t record_count_in_config = std::stoul(p.GetProperty(RECORD_COUNT_PROPERTY));
-  size_t operation_count_in_config = std::stoul(p.GetProperty(OPERATION_COUNT_PROPERTY));
-  if (record_count_in_config)
-    this->record_count_ = std::min(trace_max_requests_count, record_count_in_config);
-  else
-    this->record_count_ = trace_max_requests_count;
-  if (operation_count_in_config)
-    this->operation_count_ = std::min(trace_max_requests_count, operation_count_in_config);
-  else
-    this->operation_count_ = trace_max_requests_count;
+  this->record_count_ = std::stoul(p.GetProperty(RECORD_COUNT_PROPERTY));
+  this->operation_count_ = std::stoul(p.GetProperty(OPERATION_COUNT_PROPERTY));
 
+  this->twitter_trace_reader_ = new module::TwitterTraceReader(trace_file_path, thread_count, record_count_, operation_count_);
   // jump to first request
   this->twitter_trace_reader_->ResetIterator();
 
