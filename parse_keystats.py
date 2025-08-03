@@ -8,6 +8,9 @@ import numpy as np
 from matplotlib_venn import venn2 # type: ignore
 import matplotlib.patches as mpatches
 
+# global
+workload = ""
+
 def read_key_stats_file(file_name: str, col_names: list):
     df = pd.read_csv(file_name, header = None, names = col_names)
     # print(df)
@@ -87,7 +90,7 @@ def plot_stacked_barchart(groundtruth_file_name: str, algorithms: list):
 
     data = {'hit': [], 'miss': [], 'false': [], 'Total': gt_total}
     for algo in algorithms:
-        result_file = f"./hotkeys_{algo}.csv"
+        result_file = f"./{workload}_hotkeys_{algo}.csv"
         df_result = read_key_stats_file(result_file, ["Keys"])
         # 正确识别的热键
         hit = df_result["Keys"].isin(df_gt["Keys"]).sum()
@@ -154,7 +157,7 @@ def plot_stacked_barchart(groundtruth_file_name: str, algorithms: list):
         fontsize = 10
     )
     plt.tight_layout()
-    plt.savefig('fig_stacked_barchart_comparison.png', dpi=300)
+    plt.savefig(f'{workload}_stacked_barchart_comparison.png', dpi=300)
     print("Stacked Barchart is generated")
 
 
@@ -184,28 +187,37 @@ def plot_venn_diagram(groundtruth_file: str, result_file: str, algo_name: str):
         text.set_fontsize(12)
     for text in venn.subset_labels:
         if text: text.set_fontsize(12)
-    plt.savefig(f'fig_venn_{algo_name}.png', dpi=300)
+    plt.savefig(f'{workload}_venn_{algo_name}.png', dpi=300)
     print(f"{algo}'s Venn Figure is generated")
 
 
 if __name__ == '__main__':
+    # Check args
+    if (len(sys.argv) < 2):
+        print("Error, please input workload prefix!")
+        sys.exit()
+    # 识别命令行参数为 workload 前缀
+    # 该前缀必须与 workload 相同，比如 workloada.spec --> workloada
+    workload = str(sys.argv[1])
+    print("Workload prefix:", workload)
+
     algorithms = ["lru", "lfu", "lruk", "window", "sketch_window", "w_tinylfu", "lirs"]
     
     for algo in algorithms:
         # 计算召回、准确率
         recall, precision = calculate_hotkeys_coverage(
-            "./key_stats_hotkeys.csv", 
-            f"./hotkeys_{algo}.csv", 
+            f"./{workload}_key_stats_hotkeys.csv", 
+            f"./{workload}_hotkeys_{algo}.csv", 
             algo
         )
         # 绘制韦恩图查看交集
         plot_venn_diagram(
-            "./key_stats_hotkeys.csv",
-            f"./hotkeys_{algo}.csv",
+            f"./{workload}_key_stats_hotkeys.csv",
+            f"./{workload}_hotkeys_{algo}.csv",
             algo
         )
     # 绘制堆叠条形图
-    plot_stacked_barchart("./key_stats_hotkeys.csv", algorithms)
+    plot_stacked_barchart(f"./{workload}_key_stats_hotkeys.csv", algorithms)
     
-    plot_frequency_line("key_stats_dict_ordered.csv", "fig_key_frequency.png", False)
-    plot_frequency_line("key_stats_descend.csv", "fig_frequency_descend.png", False)
+    plot_frequency_line(f"./{workload}_key_stats_dict_ordered.csv", f"{workload}_key_frequency.png", False)
+    plot_frequency_line(f"./{workload}_key_stats_descend.csv", f"{workload}_frequency_descend.png", False)

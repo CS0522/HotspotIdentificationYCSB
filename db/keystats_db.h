@@ -51,6 +51,7 @@ public:
 
   int Special(const std::string &command);
 
+  void SetWorkloadFileName(const std::string &file_name);
   void OutputStats();
 
 private:
@@ -63,6 +64,8 @@ private:
   std::atomic<bool> start_stats_{false};
   // 开启热识别算法（仅单线程）
   std::atomic<bool> enable_hotspot_identification_{false};
+
+  std::string workload_name_ = "";
 
   // 热识别算法模块
   std::vector<module::HeatSeparator*> heat_separators;

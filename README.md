@@ -24,6 +24,8 @@ files in the workloads dir.
 
 ## 新增
 
-* `keystats` Key 数据统计信息模块，作为 `-db` 参数；
+* `keystats` Key 数据统计信息模块，作为 `-db` 参数
 
-* `modules/` 下新增热点识别算法模块。
+* `modules/` 下新增热点命令识别算法模块
+
+* 添加 Twitter Cache-trace 支持且多线程安全，但无法实现保序（Trace 文件内时间戳顺序），通过 `-DTWITTER_TRACE=ON` 启用

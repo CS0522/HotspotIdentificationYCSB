@@ -66,10 +66,13 @@ int main(const int argc, const char *argv[]) {
     exit(0);
   }
 
-  if (props["dbname"] == "keystats" && g_enable_hotspot)
+  if (props["dbname"] == "keystats")
   {
     auto keystats_db = static_cast<ycsbc::KeyStatsDB*>(db);
-    keystats_db->SetHotspotEnabled(g_enable_hotspot);
+    // set workload file name
+    keystats_db->SetWorkloadFileName(file_name);
+    if (g_enable_hotspot)
+      keystats_db->SetHotspotEnabled(g_enable_hotspot);
   }
 
   const int num_threads = stoi(props.GetProperty("threadcount", "1"));

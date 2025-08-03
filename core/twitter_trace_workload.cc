@@ -92,14 +92,16 @@ inline Operation TwitterTraceWorkload::NextOperation(size_t thread_id)
   switch (twitter_trace_op) 
   {
     case module::TwitterTraceOperation::GET:
+    case module::TwitterTraceOperation::GETS:
       return Operation::READ;
     case module::TwitterTraceOperation::SET:
     case module::TwitterTraceOperation::REPLACE:
       return Operation::UPDATE;
     case module::TwitterTraceOperation::ADD:
       return Operation::INSERT;
-    case module::TwitterTraceOperation::GETS:
-      return Operation::SCAN;
+    // 这里暂时不支持 scan
+    // case module::TwitterTraceOperation::GETS:
+    //   return Operation::SCAN;
     case module::TwitterTraceOperation::INCR:
     case module::TwitterTraceOperation::DECR:
       return Operation::READMODIFYWRITE;

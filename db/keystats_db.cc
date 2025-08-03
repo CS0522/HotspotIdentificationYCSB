@@ -1,5 +1,6 @@
 #include "db/keystats_db.h"
 #include <fstream>
+#include <sstream>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -222,11 +223,29 @@ int KeyStatsDB::Special(const std::string &command)
   return 0;
 }
 
+void KeyStatsDB::SetWorkloadFileName(const std::string &file_name)
+{
+  std::vector<std::string> parts;
+  std::stringstream ss1(file_name);
+  std::string part;
+  // 获取文件名
+  while (std::getline(ss1, part, '/'))
+    parts.push_back(part);
+  std::string tmp_name = parts.back();
+  std::stringstream ss2(tmp_name);
+  // 去除扩展名
+  while (std::getline(ss2, part, '.'))
+    parts.push_back(part);
+  parts.pop_back();
+  std::string stemname = parts.back();
+  this->workload_name_ = stemname;
+  YCSB_C_LOG_INFO("Workload Name: %s", this->workload_name_.c_str());
+}
+
 void KeyStatsDB::OutputStats()
 {
   std::lock_guard<std::mutex> lock(this->key_stats_mtx_);
   
-  size_t total_count = 0;
   // 降序输出的 vector
   std::vector<std::pair<std::string, int64_t>> key_stats_freq_descend(this->key_stats_.begin(), this->key_stats_.end());
   // 降序
@@ -243,19 +262,13 @@ void KeyStatsDB::OutputStats()
   };
   std::sort(key_stats_dict_ordered.begin(), key_stats_dict_ordered.end(), dict_cmp);
 
-  for (const auto& ks : key_stats_freq_descend)
-  {
-    total_count++;
-    if (ks.second <= 1)
-      continue;
-  }
-  YCSB_C_LOG_INFO("===========\nTotal Key Num: %zu", total_count);
+  YCSB_C_LOG_INFO("===========\nTotal Key Num: %zu", key_stats_freq_descend.size());
 
   // 输出到文件
-  std::fstream output_file_original("./key_stats.csv", std::ios::out);
-  std::fstream output_file_descend("./key_stats_descend.csv", std::ios::out);
-  std::fstream output_file_dict_ordered("./key_stats_dict_ordered.csv", std::ios::out);
-  std::fstream output_file_hotkeys("./key_stats_hotkeys.csv", std::ios::out);
+  std::fstream output_file_original("./" + this->workload_name_ + "_key_stats.csv", std::ios::out);
+  std::fstream output_file_descend("./" + this->workload_name_ + "_key_stats_descend.csv", std::ios::out);
+  std::fstream output_file_dict_ordered("./" + this->workload_name_ + "_key_stats_dict_ordered.csv", std::ios::out);
+  std::fstream output_file_hotkeys("./" + this->workload_name_ + "_key_stats_hotkeys.csv", std::ios::out);
   if (!output_file_original.is_open() || !output_file_descend.is_open() || !output_file_dict_ordered.is_open())
   {
     YCSB_C_LOG_ERROR("key_stats csv file open failed");
@@ -264,32 +277,33 @@ void KeyStatsDB::OutputStats()
   for (const auto& ks : this->key_stats_)
     output_file_original << ks.first << "," << ks.second << std::endl;
   output_file_original.close();
-  YCSB_C_LOG_INFO("key_stats.csv is generated successfully");
+  YCSB_C_LOG_INFO("%s_key_stats.csv is generated successfully", this->workload_name_.c_str());
   for (const auto& ks : key_stats_freq_descend)
     output_file_descend << ks.first << "," << ks.second << std::endl;
   output_file_descend.close();
-  YCSB_C_LOG_INFO("key_stats_descend.csv is generated successfully");
+  YCSB_C_LOG_INFO("%s_key_stats_descend.csv is generated successfully", this->workload_name_.c_str());
   for (const auto& ks : key_stats_dict_ordered)
     output_file_dict_ordered << ks.first << "," << ks.second << std::endl;
   output_file_dict_ordered.close();
-  YCSB_C_LOG_INFO("key_stats_dict_ordered.csv is generated successfully");
+  YCSB_C_LOG_INFO("%s_key_stats_dict_ordered.csv is generated successfully", this->workload_name_.c_str());
   // Top-N 的键视为热 key
   YCSB_C_LOG_INFO("Hot Key Portion: %lf", g_hot_key_portion);
   size_t portion_threshold = static_cast<size_t>(key_stats_freq_descend.size() * g_hot_key_portion);
+  YCSB_C_LOG_INFO("Hot Key Frequency Threshold: %zu", portion_threshold);
   for (size_t i = 0; i < key_stats_freq_descend.size(); i++)
   {
     if (i <= portion_threshold)
       output_file_hotkeys << key_stats_freq_descend[i].first << std::endl;
   }
   output_file_hotkeys.close();
-  YCSB_C_LOG_INFO("key_stats_hotkeys.csv is generated successfully");
+  YCSB_C_LOG_INFO("%s_key_stats_hotkeys.csv is generated successfully", this->workload_name_.c_str());
 
   // 冷热识别模块输出到文件
   std::vector<std::string> hot_keys;
   for (size_t i = 0; i < this->heat_separators.size(); i++)
   {
     // join file name
-    std::string file_name = "./hotkeys_" + this->heat_separators[i]->GetName() + ".csv";
+    std::string file_name = "./" + this->workload_name_ + "_hotkeys_" + this->heat_separators[i]->GetName() + ".csv";
     hot_keys.clear();
     this->heat_separators[i]->GetHotKeys(hot_keys);
     std::fstream hk_file(file_name, std::ios::out);
